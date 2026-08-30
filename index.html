@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Classroom Seat Master｜班級座位編排</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">CM</span>
+        <div>
+          <p class="eyebrow">CLASSROOM SEAT MASTER</p>
+          <h1 id="pageTitle">班級座位編排</h1>
+        </div>
+      </div>
+      <div class="header-actions admin-only">
+        <span class="save-status" id="saveStatus" aria-live="polite" data-i18n="common.saved">已儲存於本機</span>
+        <button class="button button-secondary language-button" type="button"><span data-language-label>EN</span></button>
+        <button class="button button-secondary" id="fullscreenButton" type="button" data-i18n="common.fullscreen">全螢幕</button>
+        <button class="button button-primary" id="presentationButton" type="button" data-i18n="common.presentation">進入展示模式</button>
+      </div>
+      <div class="header-actions presentation-only">
+        <button class="button button-secondary language-button" type="button"><span data-language-label>EN</span></button>
+        <button class="button button-secondary sound-button" id="soundButton" type="button" aria-pressed="true">
+          <span aria-hidden="true">♪</span>
+          <span id="soundButtonText">音效開啟</span>
+        </button>
+        <button class="button button-secondary" id="presentationFullscreenButton" type="button" data-i18n="common.fullscreen">全螢幕</button>
+        <button class="button button-quiet" id="adminButton" type="button" data-i18n="common.exitPresentation">結束展示</button>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <aside class="control-panel admin-only" aria-label="座位設定">
+        <section class="panel-section">
+          <div class="section-heading">
+            <div>
+              <p class="step-label" data-i18n="admin.basic">基本資料</p>
+              <h2 data-i18n="admin.classAndStudents">班級與人數</h2>
+            </div>
+            <span class="section-number">01</span>
+          </div>
+
+          <label class="field field-wide">
+            <span data-i18n="admin.className">班級名稱</span>
+            <input id="classNameInput" type="text" maxlength="30" value="601 班" />
+            <small data-i18n="admin.classNameHelp">可輸入任意班級名稱，標題與匯出檔名會自動同步。</small>
+          </label>
+
+          <div class="field-grid">
+            <label class="field">
+              <span data-i18n="admin.maxNumber">最大座號</span>
+              <input id="maxNumberInput" type="number" min="1" max="999" value="34" />
+            </label>
+            <label class="field">
+              <span data-i18n="admin.femaleStart">女生起始座號</span>
+              <input id="femaleStartInput" type="number" min="1" max="999" value="21" />
+            </label>
+          </div>
+
+          <label class="field field-wide">
+            <span data-i18n="admin.emptyNumbers">缺號／空號</span>
+            <input id="emptyNumbersInput" type="text" value="16-20" placeholder="例：16-20, 25" data-i18n-placeholder="admin.emptyPlaceholder" />
+            <small data-i18n="admin.emptyHelp">支援逗號、空白與區間，例如 16-20, 25</small>
+          </label>
+
+          <label class="field field-wide">
+            <span data-i18n="admin.displayContent">展示內容</span>
+            <select id="displayModeInput">
+              <option value="number" data-i18n="admin.numberOnly">只顯示座號</option>
+              <option value="name" data-i18n="admin.nameOnly">只顯示姓名</option>
+              <option value="both" data-i18n="admin.numberAndName">座號＋姓名</option>
+            </select>
+          </label>
+
+          <label class="field field-wide">
+            <span data-i18n="admin.studentNames">學生姓名（選填）</span>
+            <textarea id="studentNamesInput" rows="5" placeholder="1, 王小明&#10;2, 李小華&#10;3, 陳小美" data-i18n-placeholder="admin.namesPlaceholder"></textarea>
+            <small data-i18n="admin.namesHelp">每行輸入「座號, 姓名」；也可只貼姓名，系統會依有效座號順序配對。</small>
+          </label>
+
+          <div class="student-summary" id="studentSummary" aria-live="polite"></div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading">
+            <div>
+              <p class="step-label" data-i18n="admin.space">空間配置</p>
+              <h2 data-i18n="admin.grid">教室網格</h2>
+            </div>
+            <span class="section-number">02</span>
+          </div>
+
+          <div class="field-grid">
+            <label class="field">
+              <span data-i18n="admin.columns">直行數</span>
+              <input id="colsInput" type="number" min="1" max="10" value="4" />
+            </label>
+            <label class="field">
+              <span data-i18n="admin.rows">橫排數</span>
+              <input id="rowsInput" type="number" min="1" max="12" value="8" />
+            </label>
+          </div>
+
+          <div class="legend" aria-label="座位狀態圖例">
+            <span><i class="legend-dot general"></i><b data-i18n="seat.generalShort">不限</b></span>
+            <span><i class="legend-dot male"></i><b data-i18n="seat.maleShort">男生</b></span>
+            <span><i class="legend-dot female"></i><b data-i18n="seat.femaleShort">女生</b></span>
+            <span><i class="legend-dot aisle"></i><b data-i18n="seat.aisleShort">走道</b></span>
+          </div>
+
+          <p class="hint-box" data-i18n="admin.gridHelp">行數、排數可隨時增減，變更後會自動重建網格並保留仍存在的座位設定。點座位切換四種狀態；點右上角可固定座號，點外圍標籤可整批切換。</p>
+        </section>
+
+        <section class="panel-section compact-section">
+          <div class="section-heading">
+            <div>
+              <p class="step-label" data-i18n="admin.dataTools">資料工具</p>
+              <h2 data-i18n="admin.backupReset">備份與重設</h2>
+            </div>
+            <span class="section-number">03</span>
+          </div>
+          <div class="tool-grid">
+            <button class="button button-secondary" id="exportButton" type="button" data-i18n="admin.export">匯出設定</button>
+            <button class="button button-secondary" id="importButton" type="button" data-i18n="admin.import">匯入設定</button>
+            <button class="button button-secondary" id="clearPinsButton" type="button" data-i18n="admin.clearPins">清除固定</button>
+            <button class="button button-danger" id="resetButton" type="button" data-i18n="admin.reset">恢復預設</button>
+          </div>
+          <input id="importFileInput" type="file" accept="application/json,.json" hidden />
+        </section>
+      </aside>
+
+      <section class="classroom-stage" aria-label="教室座位圖">
+        <div class="presentation-decor presentation-only" aria-hidden="true">
+          <span class="aurora aurora-one"></span>
+          <span class="aurora aurora-two"></span>
+          <span class="spark spark-one">✦</span>
+          <span class="spark spark-two">✦</span>
+          <span class="spark spark-three">·</span>
+        </div>
+        <div class="stage-heading">
+          <div>
+            <p class="step-label admin-only" data-i18n="stage.preview">即時預覽</p>
+            <h2 id="stageTitle">601 班座位表</h2>
+            <p class="stage-subtitle admin-only" id="stageSubtitle">32 席 · 29 位學生 · 3 張空桌</p>
+            <p class="stage-subtitle presentation-only" data-i18n="stage.draw">座位抽籤</p>
+          </div>
+          <div class="status-key admin-only">
+            <span id="capacityBadge">容量充足</span>
+          </div>
+        </div>
+
+        <div class="admin-mode-bar admin-only" aria-label="管理模式">
+          <div class="mode-tabs" role="tablist">
+            <button class="mode-tab is-active" type="button" data-admin-mode="layout" role="tab" aria-selected="true" data-i18n="mode.layout">座位屬性</button>
+            <button class="mode-tab" type="button" data-admin-mode="prearrange" role="tab" aria-selected="false" data-i18n="mode.prearrange">事先安排</button>
+            <button class="mode-tab" id="adjustModeButton" type="button" data-admin-mode="adjust" role="tab" aria-selected="false" data-i18n="mode.adjust" disabled>調整結果</button>
+          </div>
+          <div class="mode-guidance">
+            <p id="adminModeHelp">點擊座位可切換不限、男生、女生與走道。</p>
+            <span id="prearrangeCount">已預排 0 人</span>
+          </div>
+        </div>
+
+        <div class="classroom-board">
+          <span class="board-line"></span>
+          <strong data-i18n="stage.board">講臺・黑板</strong>
+          <span class="board-line"></span>
+        </div>
+
+        <div class="grid-scroll">
+          <div id="seatGrid" class="seat-grid" aria-label="座位配置網格"></div>
+        </div>
+
+        <div id="validationPanel" class="validation-panel admin-only" hidden></div>
+
+        <div class="draw-panel presentation-only">
+          <p id="drawMessage" data-i18n="draw.ready">按下按鈕，開始公平隨機排位</p>
+          <button class="draw-button" id="drawButton" type="button">
+            <span class="draw-icon" aria-hidden="true">↻</span>
+            <span id="drawButtonText" data-i18n="draw.start">開始抽籤</span>
+          </button>
+        </div>
+
+        <div id="drawCountdown" class="draw-countdown presentation-only" aria-live="polite" aria-atomic="true">
+          <span id="drawCountdownText">3</span>
+        </div>
+        <div id="celebrationLayer" class="celebration-layer presentation-only" aria-hidden="true"></div>
+      </section>
+    </main>
+
+    <dialog id="pinDialog" class="pin-dialog">
+      <form method="dialog" id="pinForm">
+        <div class="dialog-heading">
+          <div>
+            <p class="step-label" data-i18n="pin.heading">固定座位</p>
+            <h2 id="pinDialogTitle">指定學生</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="關閉" type="submit">×</button>
+        </div>
+        <label class="field field-wide">
+          <span data-i18n="pin.number">座號</span>
+          <select id="pinStudentSelect"></select>
+          <small id="pinHelp" data-i18n="pin.help">固定設定只會在管理模式顯示。</small>
+        </label>
+        <div class="dialog-actions">
+          <button class="button button-secondary" value="cancel" type="submit" data-i18n="common.cancel">取消</button>
+          <button class="button button-primary" id="confirmPinButton" value="default" type="submit" data-i18n="common.apply">套用</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="js/constants.js"></script>
+    <script src="js/i18n.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/seat-engine.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/sound.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
