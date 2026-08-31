@@ -601,6 +601,40 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
 @keyframes confettiFall { 0% { opacity: 0; transform: translate3d(0,-20px,0) rotate(0); } 12% { opacity: 1; } 100% { opacity: 0; transform: translate3d(var(--drift), 92vh, 0) rotate(620deg); } }
 @keyframes profileOrbit { to { transform: rotate(360deg); } }
 
+@media (min-width: 981px) {
+  body:not(.presentation-mode) { height: 100%; overflow: hidden; }
+  body:not(.presentation-mode) .app-shell {
+    align-items: stretch;
+    height: calc(100vh - 82px);
+    height: calc(100dvh - 82px);
+    overflow: hidden;
+  }
+  body:not(.presentation-mode) .control-panel,
+  body:not(.presentation-mode) .classroom-stage {
+    min-height: 0;
+    max-height: 100%;
+    overscroll-behavior: contain;
+    scrollbar-color: rgba(23, 79, 60, .35) transparent;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+  }
+  body:not(.presentation-mode) .control-panel {
+    padding: 2px 8px 20px 2px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  body:not(.presentation-mode) .classroom-stage { height: 100%; overflow: auto; }
+  body:not(.presentation-mode) .control-panel::-webkit-scrollbar,
+  body:not(.presentation-mode) .classroom-stage::-webkit-scrollbar { width: 10px; height: 10px; }
+  body:not(.presentation-mode) .control-panel::-webkit-scrollbar-thumb,
+  body:not(.presentation-mode) .classroom-stage::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 99px;
+    background: rgba(23, 79, 60, .35);
+    background-clip: padding-box;
+  }
+}
+
 @media (max-width: 980px) {
   .app-shell { grid-template-columns: 1fr; }
   .classroom-stage { min-height: auto; }
