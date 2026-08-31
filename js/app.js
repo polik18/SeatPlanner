@@ -45,6 +45,7 @@
     const presentation = document.body.classList.contains("presentation-mode");
     if (!options || !options.keepInputs) ui.fillInputs(state);
     ui.renderSummary(state);
+    ui.renderRoomMarkers(state);
     ui.renderSeatGrid(state, presentation, adminMode, selectedAdjustmentSeatId);
     updateAdminModeUI();
   }
@@ -78,7 +79,10 @@
       emptyNumbers: document.getElementById("emptyNumbersInput").value,
       femaleStart: document.getElementById("femaleStartInput").value,
       displayMode: document.getElementById("displayModeInput").value,
-      studentData: document.getElementById("studentDataInput").value
+      studentData: document.getElementById("studentDataInput").value,
+      boardPosition: document.getElementById("boardPositionInput").value,
+      doorPosition: document.getElementById("doorPositionInput").value,
+      teacherPosition: document.getElementById("teacherPositionInput").value
     });
   }
 
@@ -119,6 +123,35 @@
     selectedAdjustmentSeatId = null;
     render();
     saveSoon();
+  }
+
+  function updateRoomMarkersFromInputs() {
+    const config = readConfigFromInputs();
+    state.config.boardPosition = config.boardPosition;
+    state.config.doorPosition = config.doorPosition;
+    state.config.teacherPosition = config.teacherPosition;
+    ui.renderRoomMarkers(state);
+    saveSoon();
+  }
+
+  function rotateLayout(direction) {
+    closeStudentProfile();
+    const rotated = engine.rotateSeatLayout(state.config, state.seats, state.assignment, direction);
+    state.config = engine.normalizeConfig(rotated.config);
+    state.seats = rotated.seats;
+    state.assignment = rotated.assignment;
+    selectedAdjustmentSeatId = selectedAdjustmentSeatId ? rotated.idMap.get(selectedAdjustmentSeatId) || null : null;
+    activePinSeatId = null;
+    const dialog = document.getElementById("pinDialog");
+    if (dialog.open) dialog.close();
+    render();
+    const roomLayout = document.getElementById("roomLayout");
+    roomLayout.classList.remove("is-rotating");
+    void roomLayout.offsetWidth;
+    roomLayout.classList.add("is-rotating");
+    window.setTimeout(() => roomLayout.classList.remove("is-rotating"), 360);
+    saveSoon();
+    ui.showToast(i18n.t(direction === "clockwise" ? "toast.rotatedClockwise" : "toast.rotatedCounterclockwise"));
   }
 
   function cycleSeat(seatId) {
@@ -395,6 +428,8 @@
   function refreshLanguage() {
     closeStudentProfile();
     i18n.apply();
+    ui.populateRoomPositionOptions();
+    ui.fillInputs(state);
     updateSoundButton();
     const button = document.getElementById("drawButton");
     if (button.disabled) {
@@ -413,6 +448,9 @@
   function bindEvents() {
     ["classNameInput", "rowsInput", "colsInput", "maxNumberInput", "emptyNumbersInput", "femaleStartInput", "displayModeInput"].forEach((id) => {
       document.getElementById(id).addEventListener("change", updateFromInputs);
+    });
+    ["boardPositionInput", "doorPositionInput", "teacherPositionInput"].forEach((id) => {
+      document.getElementById(id).addEventListener("change", updateRoomMarkersFromInputs);
     });
     const dataInput = document.getElementById("studentDataInput");
     dataInput.addEventListener("change", () => { normalizeStudentDataInput(false); updateFromInputs(); });
@@ -451,6 +489,8 @@
     document.getElementById("presentationButton").addEventListener("click", enterPresentation);
     document.getElementById("adminButton").addEventListener("click", exitPresentation);
     document.getElementById("drawButton").addEventListener("click", startDraw);
+    document.getElementById("rotateCounterclockwiseButton").addEventListener("click", () => rotateLayout("counterclockwise"));
+    document.getElementById("rotateClockwiseButton").addEventListener("click", () => rotateLayout("clockwise"));
     document.getElementById("studentProfileClose").addEventListener("click", closeStudentProfile);
     document.getElementById("studentProfileOverlay").addEventListener("click", (event) => {
       if (event.target.id === "studentProfileOverlay") closeStudentProfile();
@@ -513,6 +553,7 @@
   function init() {
     state = hydrate(storage.load() || SeatMaster.createDefaultState());
     i18n.apply();
+    ui.populateRoomPositionOptions();
     bindEvents();
     render();
     storage.save(state);

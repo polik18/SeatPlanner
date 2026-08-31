@@ -215,9 +215,21 @@
     return SEAT_TYPES[(index + 1 + SEAT_TYPES.length) % SEAT_TYPES.length];
   }
 
+  const ROOM_POSITIONS = [
+    "top-start", "top-center", "top-end",
+    "right-start", "right-center", "right-end",
+    "bottom-start", "bottom-center", "bottom-end",
+    "left-start", "left-center", "left-end",
+    "hidden"
+  ];
+
+  function normalizeRoomPosition(value, fallback) {
+    return ROOM_POSITIONS.includes(value) ? value : fallback;
+  }
+
   function normalizeConfig(config) {
     const rows = clampInteger(config.rows, 1, 12, 8);
-    const cols = clampInteger(config.cols, 1, 10, 4);
+    const cols = clampInteger(config.cols, 1, 12, 4);
     const maxNumber = clampInteger(config.maxNumber, 1, 999, 34);
     const displayMode = ["number", "name", "both"].includes(config.displayMode) ? config.displayMode : "number";
     return {
@@ -228,7 +240,10 @@
       emptyNumbers: String(config.emptyNumbers || "").trim(),
       femaleStart: clampInteger(config.femaleStart, 1, maxNumber + 1, Math.min(21, maxNumber + 1)),
       displayMode,
-      studentData: String(config.studentData !== undefined ? config.studentData : config.studentNames || "").slice(0, 50000)
+      studentData: String(config.studentData !== undefined ? config.studentData : config.studentNames || "").slice(0, 50000),
+      boardPosition: normalizeRoomPosition(config.boardPosition, "top-center"),
+      doorPosition: normalizeRoomPosition(config.doorPosition, "right-end"),
+      teacherPosition: normalizeRoomPosition(config.teacherPosition, "top-end")
     };
   }
 
@@ -249,6 +264,36 @@
       }
     }
     return seats;
+  }
+
+  function rotateSeatLayout(config, seats, assignment, direction) {
+    const clockwise = direction === "clockwise";
+    const counterclockwise = direction === "counterclockwise";
+    if (!clockwise && !counterclockwise) throw new Error("Unsupported rotation direction");
+
+    const oldRows = clampInteger(config.rows, 1, 12, 8);
+    const oldCols = clampInteger(config.cols, 1, 12, 4);
+    const idMap = new Map();
+    const rotatedSeats = (seats || []).map((seat) => {
+      const row = clockwise ? seat.col : oldCols - 1 - seat.col;
+      const col = clockwise ? oldRows - 1 - seat.row : seat.row;
+      const id = `${row}-${col}`;
+      idMap.set(seat.id, id);
+      return { ...seat, id, row, col };
+    }).sort((left, right) => left.row - right.row || left.col - right.col);
+
+    const rotatedAssignment = {};
+    Object.entries(assignment || {}).forEach(([oldId, value]) => {
+      const newId = idMap.get(oldId);
+      if (newId) rotatedAssignment[newId] = value;
+    });
+
+    return {
+      config: { ...config, rows: oldCols, cols: oldRows },
+      seats: rotatedSeats,
+      assignment: rotatedAssignment,
+      idMap
+    };
   }
 
   function validate(state) {
@@ -334,8 +379,11 @@
     secureShuffle,
     isCompatible,
     nextSeatType,
+    ROOM_POSITIONS,
+    normalizeRoomPosition,
     normalizeConfig,
     buildSeatGrid,
+    rotateSeatLayout,
     validate,
     arrange
   };

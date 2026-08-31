@@ -99,12 +99,48 @@
           <div class="field-grid">
             <label class="field">
               <span data-i18n="admin.columns">直行數</span>
-              <input id="colsInput" type="number" min="1" max="10" value="4" />
+              <input id="colsInput" type="number" min="1" max="12" value="4" />
             </label>
             <label class="field">
               <span data-i18n="admin.rows">橫排數</span>
               <input id="rowsInput" type="number" min="1" max="12" value="8" />
             </label>
+          </div>
+
+          <div class="layout-rotation">
+            <div>
+              <strong data-i18n="admin.rotateLayout">旋轉整張座位表</strong>
+              <small data-i18n="admin.rotateHelp">每次旋轉 90°，座位屬性、預排與抽籤結果都會保留。</small>
+            </div>
+            <div class="rotation-buttons">
+              <button class="button button-secondary" id="rotateCounterclockwiseButton" type="button">
+                <span aria-hidden="true">↶</span><span data-i18n="admin.rotateCounterclockwise">逆時針 90°</span>
+              </button>
+              <button class="button button-secondary" id="rotateClockwiseButton" type="button">
+                <span data-i18n="admin.rotateClockwise">順時針 90°</span><span aria-hidden="true">↷</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="room-marker-settings">
+            <div class="room-marker-heading">
+              <strong data-i18n="admin.roomMarkers">教室標記位置</strong>
+              <small data-i18n="admin.roomMarkersHelp">黑板、門與老師座位可各自放在教室四周，也可隱藏。</small>
+            </div>
+            <div class="room-marker-fields">
+              <label class="field">
+                <span data-i18n="admin.boardPosition">黑板</span>
+                <select id="boardPositionInput" data-room-position-select></select>
+              </label>
+              <label class="field">
+                <span data-i18n="admin.doorPosition">門</span>
+                <select id="doorPositionInput" data-room-position-select></select>
+              </label>
+              <label class="field">
+                <span data-i18n="admin.teacherPosition">老師座位</span>
+                <select id="teacherPositionInput" data-room-position-select></select>
+              </label>
+            </div>
           </div>
 
           <div class="legend" aria-label="座位狀態圖例">
@@ -167,14 +203,30 @@
           </div>
         </div>
 
-        <div class="classroom-board">
-          <span class="board-line"></span>
-          <strong data-i18n="stage.board">講臺・黑板</strong>
-          <span class="board-line"></span>
-        </div>
-
-        <div class="grid-scroll">
-          <div id="seatGrid" class="seat-grid" aria-label="座位配置網格"></div>
+        <div class="room-layout" id="roomLayout">
+          <div class="room-edge room-edge-top">
+            <div class="room-slot" data-room-slot="top-start"></div>
+            <div class="room-slot" data-room-slot="top-center"></div>
+            <div class="room-slot" data-room-slot="top-end"></div>
+          </div>
+          <div class="room-edge room-edge-left">
+            <div class="room-slot" data-room-slot="left-start"></div>
+            <div class="room-slot" data-room-slot="left-center"></div>
+            <div class="room-slot" data-room-slot="left-end"></div>
+          </div>
+          <div class="grid-scroll">
+            <div id="seatGrid" class="seat-grid" aria-label="座位配置網格"></div>
+          </div>
+          <div class="room-edge room-edge-right">
+            <div class="room-slot" data-room-slot="right-start"></div>
+            <div class="room-slot" data-room-slot="right-center"></div>
+            <div class="room-slot" data-room-slot="right-end"></div>
+          </div>
+          <div class="room-edge room-edge-bottom">
+            <div class="room-slot" data-room-slot="bottom-start"></div>
+            <div class="room-slot" data-room-slot="bottom-center"></div>
+            <div class="room-slot" data-room-slot="bottom-end"></div>
+          </div>
         </div>
 
         <div id="validationPanel" class="validation-panel admin-only" hidden></div>

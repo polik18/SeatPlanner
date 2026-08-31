@@ -28,6 +28,37 @@
     return i18n.t(`seat.${type}`);
   }
 
+  const roomPositionOptions = [
+    ["top-start", "room.position.topStart"], ["top-center", "room.position.topCenter"], ["top-end", "room.position.topEnd"],
+    ["right-start", "room.position.rightStart"], ["right-center", "room.position.rightCenter"], ["right-end", "room.position.rightEnd"],
+    ["bottom-start", "room.position.bottomStart"], ["bottom-center", "room.position.bottomCenter"], ["bottom-end", "room.position.bottomEnd"],
+    ["left-start", "room.position.leftStart"], ["left-center", "room.position.leftCenter"], ["left-end", "room.position.leftEnd"],
+    ["hidden", "room.position.hidden"]
+  ];
+
+  function populateRoomPositionOptions() {
+    document.querySelectorAll("[data-room-position-select]").forEach((select) => {
+      const selected = select.value;
+      select.innerHTML = roomPositionOptions.map(([value, key]) => `<option value="${value}">${escapeHtml(i18n.t(key))}</option>`).join("");
+      if (roomPositionOptions.some(([value]) => value === selected)) select.value = selected;
+    });
+  }
+
+  function renderRoomMarkers(state) {
+    document.querySelectorAll("[data-room-slot]").forEach((slot) => { slot.innerHTML = ""; });
+    [
+      { key: "boardPosition", type: "board", icon: "▰", label: "room.board" },
+      { key: "doorPosition", type: "door", icon: "▯", label: "room.door" },
+      { key: "teacherPosition", type: "teacher", icon: "◆", label: "room.teacher" }
+    ].forEach((marker) => {
+      const position = state.config[marker.key];
+      if (position === "hidden") return;
+      const slot = document.querySelector(`[data-room-slot="${position}"]`);
+      if (!slot) return;
+      slot.insertAdjacentHTML("beforeend", `<span class="room-marker room-marker-${marker.type}" data-room-marker="${marker.type}"><span class="room-marker-icon" aria-hidden="true">${marker.icon}</span><span>${escapeHtml(i18n.t(marker.label))}</span></span>`);
+    });
+  }
+
   function presentationStudentContent(state, number, directory) {
     if (number === null || number === undefined) return "<strong>—</strong>";
     const mode = state.config.displayMode || "number";
@@ -125,7 +156,10 @@
       emptyNumbersInput: "emptyNumbers",
       femaleStartInput: "femaleStart",
       displayModeInput: "displayMode",
-      studentDataInput: "studentData"
+      studentDataInput: "studentData",
+      boardPositionInput: "boardPosition",
+      doorPositionInput: "doorPosition",
+      teacherPositionInput: "teacherPosition"
     };
     Object.entries(mapping).forEach(([id, key]) => { document.getElementById(id).value = state.config[key]; });
   }
@@ -150,5 +184,5 @@
     if (main) main.innerHTML = presentationStudentContent(state, number, directory);
   }
 
-  SeatMaster.ui = { escapeHtml, columnLabel, renderSeatGrid, renderSummary, fillInputs, showToast, setSaveStatus, renderRollingValue };
+  SeatMaster.ui = { escapeHtml, columnLabel, populateRoomPositionOptions, renderRoomMarkers, renderSeatGrid, renderSummary, fillInputs, showToast, setSaveStatus, renderRollingValue };
 })();

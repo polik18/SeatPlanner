@@ -21,7 +21,10 @@
       emptyNumbers: "16-20",
       femaleStart: 21,
       displayMode: "number",
-      studentData: ""
+      studentData: "",
+      boardPosition: "top-center",
+      doorPosition: "right-end",
+      teacherPosition: "top-end"
     })
   });
 
