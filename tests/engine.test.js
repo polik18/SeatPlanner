@@ -77,6 +77,21 @@ const pastedRecords = engine.parseStudentRecords(pastedClassRoster, students);
 assert.equal(pastedRecords.size, 27);
 assert.equal(pastedRecords.get(34).name, "劉知樂");
 
+const spreadsheetNumbers = [...Array.from({ length: 13 }, (_, index) => index + 1), ...Array.from({ length: 14 }, (_, index) => index + 21)];
+const spreadsheetRows = spreadsheetNumbers.map((number) => `${number}\t測試學生${number}\t****${String(number).padStart(6, "0")}\taccount${number}`);
+spreadsheetRows.splice(6, 0, "\t\t\torphan-account-a");
+spreadsheetRows.splice(22, 0, "\t\t\torphan-account-b");
+spreadsheetRows.splice(23, 0, "orphan-account-c");
+const pastedSpreadsheetWithStrayAccounts = `座號\t姓名\t密碼\t帳號\n${spreadsheetRows.join("\n")}`;
+const inferredNumbers = engine.inferStudentNumbers(pastedSpreadsheetWithStrayAccounts);
+assert.equal(inferredNumbers.length, 27);
+assert.equal(engine.formatNumberRanges(Array.from({ length: 34 }, (_, index) => index + 1).filter((number) => !inferredNumbers.includes(number))), "14-20");
+const spreadsheetStudents = engine.buildStudents(engine.normalizeConfig({ maxNumber: 34, emptyNumbers: "14-20", femaleStart: 21 }));
+const spreadsheetRecords = engine.parseStudentRecords(pastedSpreadsheetWithStrayAccounts, spreadsheetStudents);
+assert.equal(spreadsheetRecords.size, 27);
+assert.equal(spreadsheetRecords.has(14), false);
+assert.equal(spreadsheetRecords.get(28).fields.find((field) => field.label === "帳號").value, "account28");
+
 state.seats[0].type = "male";
 state.seats[1].type = "female";
 state.seats[2].pin = 1;
@@ -113,4 +128,4 @@ const expandedSeats = engine.buildSeatGrid({ ...dynamicConfig, rows: 5, cols: 6 
 assert.equal(expandedSeats.length, 30);
 assert.equal(expandedSeats.find((seat) => seat.id === "0-0").type, "male");
 
-console.log("engine tests: 32 assertions passed");
+console.log("engine tests passed");

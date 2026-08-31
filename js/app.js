@@ -82,8 +82,22 @@
     });
   }
 
-  function normalizeStudentDataInput(showFeedback) {
+  function syncRosterConfigFromSpreadsheet(value) {
+    const numbers = engine.inferStudentNumbers(value);
+    if (!numbers.length) return;
+    const maxNumber = numbers[numbers.length - 1];
+    const present = new Set(numbers);
+    const emptyNumbers = [];
+    for (let number = 1; number <= maxNumber; number += 1) {
+      if (!present.has(number)) emptyNumbers.push(number);
+    }
+    document.getElementById("maxNumberInput").value = maxNumber;
+    document.getElementById("emptyNumbersInput").value = engine.formatNumberRanges(emptyNumbers);
+  }
+
+  function normalizeStudentDataInput(showFeedback, syncRoster) {
     const input = document.getElementById("studentDataInput");
+    if (syncRoster) syncRosterConfigFromSpreadsheet(input.value);
     const config = readConfigFromInputs();
     const students = engine.buildStudents(config);
     const records = engine.parseStudentRecords(input.value, students);
@@ -403,7 +417,7 @@
     const dataInput = document.getElementById("studentDataInput");
     dataInput.addEventListener("change", () => { normalizeStudentDataInput(false); updateFromInputs(); });
     dataInput.addEventListener("paste", () => {
-      window.setTimeout(() => { normalizeStudentDataInput(true); updateFromInputs(); }, 0);
+      window.setTimeout(() => { normalizeStudentDataInput(true, true); updateFromInputs(); }, 0);
     });
 
     document.getElementById("seatGrid").addEventListener("click", (event) => {

@@ -68,18 +68,62 @@
     return /^(?:座號|學號|號碼|number|no\.?)$/i.test(cells[0] || "") && /^(?:姓名|name)$/i.test(cells[1] || "");
   }
 
+  function inferStudentNumbers(input) {
+    const numbers = new Set();
+    let hasHeader = false;
+
+    String(input || "").split(/\r?\n/).forEach((rawLine) => {
+      if (!rawLine.trim()) return;
+      const cells = splitStudentDataCells(rawLine);
+      if (isStudentDataHeader(cells)) {
+        hasHeader = true;
+        return;
+      }
+      if (!hasHeader || !/^\d+$/.test(cells[0] || "")) return;
+      const number = Number(cells[0]);
+      if (number >= 1 && number <= 999) numbers.add(number);
+    });
+
+    return hasHeader ? Array.from(numbers).sort((left, right) => left - right) : [];
+  }
+
+  function formatNumberRanges(numbers) {
+    const ordered = Array.from(new Set((numbers || []).filter((number) => Number.isInteger(number) && number >= 1 && number <= 999)))
+      .sort((left, right) => left - right);
+    const ranges = [];
+    let start = null;
+    let end = null;
+
+    ordered.forEach((number) => {
+      if (start === null) {
+        start = number;
+        end = number;
+      } else if (number === end + 1) {
+        end = number;
+      } else {
+        ranges.push(start === end ? String(start) : `${start}-${end}`);
+        start = number;
+        end = number;
+      }
+    });
+    if (start !== null) ranges.push(start === end ? String(start) : `${start}-${end}`);
+    return ranges.join(", ");
+  }
+
   function parseStudentRecords(input, students) {
     const records = new Map();
     const roster = students || [];
     const validNumbers = new Set(roster.map((student) => student.number));
     let sequentialIndex = 0;
     let fieldHeaders = [];
+    let hasStructuredHeader = false;
 
     String(input || "").split(/\r?\n/).forEach((rawLine) => {
       const line = rawLine.trim();
       if (!line) return;
       const cells = splitStudentDataCells(rawLine);
       if (isStudentDataHeader(cells)) {
+        hasStructuredHeader = true;
         fieldHeaders = cells.slice(2).map((label, index) => label || `${translated("studentData.field", { number: index + 1 }, "欄位 {number}")}`);
         return;
       }
@@ -94,6 +138,11 @@
         records.set(number, { number, name, fields });
         return;
       }
+
+      // A spreadsheet row with an empty student number is not a name-only
+      // roster entry. Ignore stray values in later columns instead of assigning
+      // them sequentially to the next available student number.
+      if (hasStructuredHeader || rawLine.includes("\t") || /[，,]/.test(rawLine)) return;
 
       while (sequentialIndex < roster.length && records.has(roster[sequentialIndex].number)) sequentialIndex += 1;
       if (sequentialIndex < roster.length) {
@@ -275,6 +324,8 @@
   SeatMaster.engine = {
     clampInteger,
     parseEmptyNumbers,
+    inferStudentNumbers,
+    formatNumberRanges,
     buildStudents,
     parseStudentRecords,
     parseStudentNames,
