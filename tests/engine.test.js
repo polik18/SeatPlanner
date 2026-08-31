@@ -28,6 +28,55 @@ assert.equal(names.get(1), "王小明");
 assert.equal(names.get(2), "李小華");
 assert.equal(names.get(3), "陳小美");
 
+const excelRoster = "座號\t姓名\n1\t吳于睿\t男\n2\t李嘉瑜\n3\t戴靖\n\t\n4\t柯益維\n21\t鄭瑀\n\n34\t劉知樂";
+const excelNames = engine.parseStudentNames(excelRoster, students);
+assert.equal(excelNames.size, 6);
+assert.equal(excelNames.get(21), "鄭瑀");
+assert.equal(engine.normalizeStudentNames(excelRoster, students).split("\n")[0], "座號\t姓名\t欄位 1");
+
+const richData = "座號\t姓名\t外號\t帳號\t密碼\t居住地點\n1\t吳于睿\t小睿\tstudent01\tpass-001\t臺北市\n\n21\t鄭瑀\t小瑀\tstudent21\tpass-021\t新北市";
+const records = engine.parseStudentRecords(richData, students);
+assert.equal(records.size, 2);
+assert.equal(records.get(1).name, "吳于睿");
+assert.equal(records.get(1).fields.length, 4);
+assert.equal(records.get(1).fields.find((field) => field.label === "密碼").value, "pass-001");
+assert.equal(engine.normalizeStudentData(richData, students).split("\n")[0], "座號\t姓名\t外號\t帳號\t密碼\t居住地點");
+assert.equal(engine.normalizeStudentData("座號\t姓名\t備註\n1\t吳于睿\t", students).split("\n")[0], "座號\t姓名\t備註");
+assert.equal(engine.normalizeConfig({ studentNames: "1, 舊姓名" }).studentData, "1, 舊姓名");
+
+const pastedClassRoster = `1\t吳于睿
+2\t李嘉瑜
+3\t戴靖
+4\t柯益維
+5\t蘇莛量
+6\t張晨赫
+\t
+7\t陳宣豫
+8\t蔡尚勳
+9\t廖晟安
+10\t柯奕丞
+11\t楊昕宸
+12\t楊牧群
+13\t黃之恆
+21\t鄭瑀
+22\t楊孟筑
+23\t陳宣妤
+24\t陳欣岳
+25\t陳若平
+26\t黃馨菲
+27\t黃芊語
+28\t朱懷善
+\t
+29\t黃若瑄
+30\t王苡安
+31\t鄭亦媗
+32\t顏思恬
+33\t劉亮妤
+34\t劉知樂`;
+const pastedRecords = engine.parseStudentRecords(pastedClassRoster, students);
+assert.equal(pastedRecords.size, 27);
+assert.equal(pastedRecords.get(34).name, "劉知樂");
+
 state.seats[0].type = "male";
 state.seats[1].type = "female";
 state.seats[2].pin = 1;
@@ -53,7 +102,7 @@ const dynamicConfig = engine.normalizeConfig({
   emptyNumbers: "",
   femaleStart: 5,
   displayMode: "both",
-  studentNames: "1, 學生一"
+  studentData: "1, 學生一"
 });
 const dynamicSeats = engine.buildSeatGrid(dynamicConfig, []);
 assert.equal(dynamicConfig.className, "302 自訂班");
@@ -64,4 +113,4 @@ const expandedSeats = engine.buildSeatGrid({ ...dynamicConfig, rows: 5, cols: 6 
 assert.equal(expandedSeats.length, 30);
 assert.equal(expandedSeats.find((seat) => seat.id === "0-0").type, "male");
 
-console.log("engine tests: 20 assertions passed");
+console.log("engine tests: 32 assertions passed");

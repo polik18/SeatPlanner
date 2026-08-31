@@ -66,7 +66,8 @@
     grid.style.setProperty("--cols", state.config.cols);
     const html = [];
     const students = SeatMaster.engine.buildStudents(state.config);
-    const directory = SeatMaster.engine.parseStudentNames(state.config.studentNames, students);
+    const records = SeatMaster.engine.parseStudentRecords(state.config.studentData, students);
+    const directory = SeatMaster.engine.parseStudentNames(state.config.studentData, students);
     if (!presentation) {
       html.push('<span class="grid-corner"></span>');
       for (let col = 0; col < state.config.cols; col += 1) {
@@ -80,9 +81,12 @@
         const seat = state.seats.find((item) => item.row === row && item.col === col);
         const classes = ["seat"];
         if (presentation && seat.type === "aisle") classes.push("is-aisle");
+        const assignedNumber = presentation && state.hasDrawn ? state.assignment[seat.id] : null;
+        const hasProfile = Number.isInteger(assignedNumber) && records.has(assignedNumber);
+        if (presentation && hasProfile) classes.push("has-profile");
         if (!presentation && adminMode === "prearrange") classes.push("prearrange-seat", seat.pin ? "is-pinned-seat" : "");
         if (!presentation && adminMode === "adjust") classes.push("admin-adjust-seat", selectedSeatId === seat.id ? "is-swap-selected" : "");
-        html.push(`<div class="${classes.filter(Boolean).join(" ")}" data-seat-id="${seat.id}" data-type="${presentation ? "general" : seat.type}" role="button" tabindex="${presentation ? "-1" : "0"}" aria-label="${presentation ? "Seat" : escapeHtml(typeLabel(seat.type))}">${seatContent(seat, state, presentation, directory, adminMode)}</div>`);
+        html.push(`<div class="${classes.filter(Boolean).join(" ")}" data-seat-id="${seat.id}" data-type="${presentation ? "general" : seat.type}" role="button" tabindex="${presentation && !hasProfile ? "-1" : "0"}" aria-label="${presentation ? escapeHtml(hasProfile ? i18n.t("profile.openCard") : "Seat") : escapeHtml(typeLabel(seat.type))}">${seatContent(seat, state, presentation, directory, adminMode)}${presentation && hasProfile ? '<span class="profile-indicator" aria-hidden="true">＋</span>' : ""}</div>`);
       }
     }
     grid.innerHTML = html.join("");
@@ -121,7 +125,7 @@
       emptyNumbersInput: "emptyNumbers",
       femaleStartInput: "femaleStart",
       displayModeInput: "displayMode",
-      studentNamesInput: "studentNames"
+      studentDataInput: "studentData"
     };
     Object.entries(mapping).forEach(([id, key]) => { document.getElementById(id).value = state.config[key]; });
   }
@@ -141,7 +145,7 @@
 
   function renderRollingValue(element, state, number) {
     const students = SeatMaster.engine.buildStudents(state.config);
-    const directory = SeatMaster.engine.parseStudentNames(state.config.studentNames, students);
+    const directory = SeatMaster.engine.parseStudentNames(state.config.studentData, students);
     const main = element.querySelector(".seat-main");
     if (main) main.innerHTML = presentationStudentContent(state, number, directory);
   }

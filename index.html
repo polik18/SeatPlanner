@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>Classroom Seat Master｜班級座位編排</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23174f3c'/%3E%3Cpath d='M18 18h28v9H27v10h19v9H18z' fill='%23fff'/%3E%3Ccircle cx='46' cy='18' r='7' fill='%23e77732'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="assets/styles.css" />
   </head>
   <body>
@@ -77,9 +78,10 @@
           </label>
 
           <label class="field field-wide">
-            <span data-i18n="admin.studentNames">學生姓名（選填）</span>
-            <textarea id="studentNamesInput" rows="5" placeholder="1, 王小明&#10;2, 李小華&#10;3, 陳小美" data-i18n-placeholder="admin.namesPlaceholder"></textarea>
-            <small data-i18n="admin.namesHelp">每行輸入「座號, 姓名」；也可只貼姓名，系統會依有效座號順序配對。</small>
+            <span data-i18n="admin.studentData">學生資料（選填）</span>
+            <textarea id="studentDataInput" rows="7" placeholder="座號　姓名　外號　帳號　密碼　居住地點" data-i18n-placeholder="admin.dataPlaceholder"></textarea>
+            <small data-i18n="admin.dataHelp">第一列填欄名，可直接貼上 Excel；姓名後方可增加任意資料欄位。</small>
+            <small class="privacy-note" data-i18n="admin.dataPrivacy">資料會在展示模式點擊學生卡牌後顯示；密碼類欄位預設遮罩，請仍避免輸入不應公開的敏感資訊。</small>
           </label>
 
           <div class="student-summary" id="studentSummary" aria-live="polite"></div>
@@ -212,6 +214,31 @@
         </div>
       </form>
     </dialog>
+
+    <div id="studentProfileOverlay" class="student-profile-overlay" role="dialog" aria-modal="true" aria-labelledby="studentProfileName" hidden>
+      <button class="profile-close" id="studentProfileClose" type="button" aria-label="關閉">×</button>
+      <div class="student-profile-card" id="studentProfileCard">
+        <div class="student-profile-inner">
+          <section class="profile-face profile-front" aria-hidden="true">
+            <span class="profile-orbit" aria-hidden="true"></span>
+            <p id="studentProfileNumber">No. 1</p>
+            <h2 id="studentProfileFrontName">學生姓名</h2>
+            <small data-i18n="profile.flipping">正在翻開學生資料卡…</small>
+          </section>
+          <section class="profile-face profile-back">
+            <div class="profile-heading">
+              <div>
+                <p id="studentProfileBackNumber">No. 1</p>
+                <h2 id="studentProfileName">學生姓名</h2>
+              </div>
+              <span class="profile-badge" data-i18n="profile.badge">STUDENT CARD</span>
+            </div>
+            <div id="studentProfileFields" class="profile-fields"></div>
+            <p class="profile-hint" id="studentProfileHint" data-i18n="profile.closeHint">點卡片外側或按 Esc 關閉</p>
+          </section>
+        </div>
+      </div>
+    </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 

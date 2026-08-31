@@ -10,6 +10,7 @@
   let drawTimeouts = [];
   let adminMode = "layout";
   let selectedAdjustmentSeatId = null;
+  let profileFlipTimer = null;
 
   function hydrate(rawState) {
     const config = engine.normalizeConfig(rawState && rawState.config ? rawState.config : state.config);
@@ -77,8 +78,20 @@
       emptyNumbers: document.getElementById("emptyNumbersInput").value,
       femaleStart: document.getElementById("femaleStartInput").value,
       displayMode: document.getElementById("displayModeInput").value,
-      studentNames: document.getElementById("studentNamesInput").value
+      studentData: document.getElementById("studentDataInput").value
     });
+  }
+
+  function normalizeStudentDataInput(showFeedback) {
+    const input = document.getElementById("studentDataInput");
+    const config = readConfigFromInputs();
+    const students = engine.buildStudents(config);
+    const records = engine.parseStudentRecords(input.value, students);
+    input.value = engine.normalizeStudentData(input.value, students);
+    if (showFeedback) {
+      const key = !records.size ? "toast.rosterEmpty" : records.size < students.length ? "toast.rosterParsedPartial" : "toast.rosterParsed";
+      ui.showToast(i18n.t(key, { count: records.size, total: students.length, missing: students.length - records.size }), records.size ? undefined : "error");
+    }
   }
 
   function updateFromInputs() {
@@ -169,6 +182,7 @@
   }
 
   function exitPresentation() {
+    closeStudentProfile();
     window.clearInterval(drawingTimer);
     drawTimeouts.forEach(window.clearTimeout);
     drawTimeouts = [];
@@ -177,6 +191,50 @@
     adminMode = state.hasDrawn ? "adjust" : adminMode;
     selectedAdjustmentSeatId = null;
     render({ keepInputs: true });
+  }
+
+  function isSensitiveField(label) {
+    return /(?:密碼|密码|口令|password|passwd|passcode|pwd|pin)/i.test(String(label || ""));
+  }
+
+  function openStudentProfile(seatId) {
+    if (!state.hasDrawn) return;
+    const number = state.assignment[seatId];
+    if (!Number.isInteger(number)) return;
+    const students = engine.buildStudents(state.config);
+    const record = engine.parseStudentRecords(state.config.studentData, students).get(number);
+    if (!record) return;
+    const overlay = document.getElementById("studentProfileOverlay");
+    const card = document.getElementById("studentProfileCard");
+    const numberLabel = i18n.t("seat.number", { number });
+    const name = record.name || numberLabel;
+    document.getElementById("studentProfileNumber").textContent = numberLabel;
+    document.getElementById("studentProfileBackNumber").textContent = numberLabel;
+    document.getElementById("studentProfileFrontName").textContent = name;
+    document.getElementById("studentProfileName").textContent = name;
+    const fields = document.getElementById("studentProfileFields");
+    fields.innerHTML = record.fields.length ? record.fields.map((field, index) => {
+      const sensitive = isSensitiveField(field.label);
+      const value = sensitive ? "••••••••" : field.value;
+      return `<div class="profile-field"><span>${ui.escapeHtml(field.label)}</span><div class="profile-value-row"><strong id="profileValue${index}" ${sensitive ? `data-actual="${ui.escapeHtml(field.value)}" data-sensitive="true"` : ""}>${ui.escapeHtml(value)}</strong>${sensitive ? `<button class="sensitive-toggle" type="button" data-target="profileValue${index}" aria-pressed="false">${ui.escapeHtml(i18n.t("profile.reveal"))}</button>` : ""}</div></div>`;
+    }).join("") : `<p class="profile-empty">${ui.escapeHtml(i18n.t("profile.noData"))}</p>`;
+    window.clearTimeout(profileFlipTimer);
+    overlay.hidden = false;
+    card.classList.remove("is-flipped");
+    requestAnimationFrame(() => {
+      overlay.classList.add("is-open");
+      profileFlipTimer = window.setTimeout(() => card.classList.add("is-flipped"), 260);
+    });
+    document.getElementById("studentProfileClose").focus({ preventScroll: true });
+  }
+
+  function closeStudentProfile() {
+    const overlay = document.getElementById("studentProfileOverlay");
+    const card = document.getElementById("studentProfileCard");
+    window.clearTimeout(profileFlipTimer);
+    card.classList.remove("is-flipped");
+    overlay.classList.remove("is-open");
+    window.setTimeout(() => { if (!overlay.classList.contains("is-open")) overlay.hidden = true; }, 260);
   }
 
   function setAdminMode(mode) {
@@ -255,6 +313,7 @@
   }
 
   function startDraw() {
+    closeStudentProfile();
     let assignment;
     try {
       assignment = engine.arrange(state);
@@ -320,6 +379,7 @@
   }
 
   function refreshLanguage() {
+    closeStudentProfile();
     i18n.apply();
     updateSoundButton();
     const button = document.getElementById("drawButton");
@@ -337,8 +397,13 @@
   }
 
   function bindEvents() {
-    ["classNameInput", "rowsInput", "colsInput", "maxNumberInput", "emptyNumbersInput", "femaleStartInput", "displayModeInput", "studentNamesInput"].forEach((id) => {
+    ["classNameInput", "rowsInput", "colsInput", "maxNumberInput", "emptyNumbersInput", "femaleStartInput", "displayModeInput"].forEach((id) => {
       document.getElementById(id).addEventListener("change", updateFromInputs);
+    });
+    const dataInput = document.getElementById("studentDataInput");
+    dataInput.addEventListener("change", () => { normalizeStudentDataInput(false); updateFromInputs(); });
+    dataInput.addEventListener("paste", () => {
+      window.setTimeout(() => { normalizeStudentDataInput(true); updateFromInputs(); }, 0);
     });
 
     document.getElementById("seatGrid").addEventListener("click", (event) => {
@@ -347,7 +412,9 @@
       const axis = event.target.closest("[data-axis]");
       if (axis) { cycleAxis(axis.dataset.axis, Number(axis.dataset.index)); return; }
       const seat = event.target.closest(".seat");
-      if (seat && !document.body.classList.contains("presentation-mode")) {
+      if (seat && document.body.classList.contains("presentation-mode")) {
+        openStudentProfile(seat.dataset.seatId);
+      } else if (seat) {
         if (adminMode === "prearrange") openPinDialog(seat.dataset.seatId);
         else if (adminMode === "adjust") selectAdjustmentSeat(seat.dataset.seatId);
         else cycleSeat(seat.dataset.seatId);
@@ -357,7 +424,8 @@
     document.getElementById("seatGrid").addEventListener("keydown", (event) => {
       if ((event.key === "Enter" || event.key === " ") && event.target.classList.contains("seat")) {
         event.preventDefault();
-        if (adminMode === "prearrange") openPinDialog(event.target.dataset.seatId);
+        if (document.body.classList.contains("presentation-mode")) openStudentProfile(event.target.dataset.seatId);
+        else if (adminMode === "prearrange") openPinDialog(event.target.dataset.seatId);
         else if (adminMode === "adjust") selectAdjustmentSeat(event.target.dataset.seatId);
         else cycleSeat(event.target.dataset.seatId);
       }
@@ -369,6 +437,21 @@
     document.getElementById("presentationButton").addEventListener("click", enterPresentation);
     document.getElementById("adminButton").addEventListener("click", exitPresentation);
     document.getElementById("drawButton").addEventListener("click", startDraw);
+    document.getElementById("studentProfileClose").addEventListener("click", closeStudentProfile);
+    document.getElementById("studentProfileOverlay").addEventListener("click", (event) => {
+      if (event.target.id === "studentProfileOverlay") closeStudentProfile();
+      const toggle = event.target.closest(".sensitive-toggle");
+      if (toggle) {
+        const value = document.getElementById(toggle.dataset.target);
+        const revealed = toggle.getAttribute("aria-pressed") === "true";
+        toggle.setAttribute("aria-pressed", String(!revealed));
+        toggle.textContent = i18n.t(revealed ? "profile.reveal" : "profile.hide");
+        value.textContent = revealed ? "••••••••" : value.dataset.actual;
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !document.getElementById("studentProfileOverlay").hidden) closeStudentProfile();
+    });
     document.querySelectorAll("[data-admin-mode]").forEach((button) => button.addEventListener("click", () => setAdminMode(button.dataset.adminMode)));
     document.querySelectorAll(".language-button").forEach((button) => {
       button.addEventListener("click", () => { i18n.toggle(); refreshLanguage(); });

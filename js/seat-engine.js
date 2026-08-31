@@ -54,30 +54,87 @@
     return students;
   }
 
-  function parseStudentNames(input, students) {
-    const directory = new Map();
+  function splitStudentDataCells(rawLine) {
+    if (rawLine.includes("\t")) return rawLine.split("\t").map((cell) => cell.trim());
+    if (/[，,]/.test(rawLine)) return rawLine.split(/[，,]/).map((cell) => cell.trim());
+    const colon = rawLine.trim().match(/^(\d+)\s*[:：]\s*(.+)$/);
+    if (colon) return [colon[1], colon[2].trim()];
+    const spaced = rawLine.trim().match(/^(\d+)\s{2,}(.+)$/);
+    if (spaced) return [spaced[1], spaced[2].trim()];
+    return [rawLine.trim()];
+  }
+
+  function isStudentDataHeader(cells) {
+    return /^(?:座號|學號|號碼|number|no\.?)$/i.test(cells[0] || "") && /^(?:姓名|name)$/i.test(cells[1] || "");
+  }
+
+  function parseStudentRecords(input, students) {
+    const records = new Map();
     const roster = students || [];
     const validNumbers = new Set(roster.map((student) => student.number));
     let sequentialIndex = 0;
+    let fieldHeaders = [];
 
     String(input || "").split(/\r?\n/).forEach((rawLine) => {
       const line = rawLine.trim();
       if (!line) return;
-      const explicit = line.match(/^(\d+)\s*(?:[,，:：\t]|\s{2,})\s*(.+)$/);
-      if (explicit) {
-        const number = Number(explicit[1]);
-        const name = explicit[2].trim().slice(0, 30);
-        if (validNumbers.has(number) && name) directory.set(number, name);
+      const cells = splitStudentDataCells(rawLine);
+      if (isStudentDataHeader(cells)) {
+        fieldHeaders = cells.slice(2).map((label, index) => label || `${translated("studentData.field", { number: index + 1 }, "欄位 {number}")}`);
+        return;
+      }
+      if (/^\d+$/.test(cells[0] || "")) {
+        const number = Number(cells[0]);
+        if (!validNumbers.has(number)) return;
+        const name = String(cells[1] || "").trim().slice(0, 50);
+        const fields = cells.slice(2).map((value, index) => ({
+          label: String(fieldHeaders[index] || translated("studentData.field", { number: index + 1 }, "欄位 {number}")).trim().slice(0, 30),
+          value: String(value || "").trim().slice(0, 300)
+        })).filter((field) => field.value);
+        records.set(number, { number, name, fields });
         return;
       }
 
-      while (sequentialIndex < roster.length && directory.has(roster[sequentialIndex].number)) sequentialIndex += 1;
+      while (sequentialIndex < roster.length && records.has(roster[sequentialIndex].number)) sequentialIndex += 1;
       if (sequentialIndex < roster.length) {
-        directory.set(roster[sequentialIndex].number, line.slice(0, 30));
+        const number = roster[sequentialIndex].number;
+        records.set(number, { number, name: line.slice(0, 50), fields: [] });
         sequentialIndex += 1;
       }
     });
+    records.fieldHeaders = fieldHeaders.slice();
+    return records;
+  }
+
+  function parseStudentNames(input, students) {
+    const directory = new Map();
+    parseStudentRecords(input, students).forEach((record, number) => {
+      if (record.name) directory.set(number, record.name);
+    });
     return directory;
+  }
+
+  function normalizeStudentData(input, students) {
+    const roster = students || [];
+    const records = parseStudentRecords(input, roster);
+    const fieldLabels = Array.isArray(records.fieldHeaders) ? records.fieldHeaders.slice() : [];
+    records.forEach((record) => record.fields.forEach((field) => {
+      if (!fieldLabels.includes(field.label)) fieldLabels.push(field.label);
+    }));
+    const orderedRecords = roster.map((student) => records.get(student.number)).filter(Boolean);
+    if (!fieldLabels.length) return orderedRecords.map((record) => `${record.number}, ${record.name}`).join("\n");
+    const numberHeader = translated("studentData.number", {}, "座號");
+    const nameHeader = translated("studentData.name", {}, "姓名");
+    const lines = [[numberHeader, nameHeader, ...fieldLabels].join("\t")];
+    orderedRecords.forEach((record) => {
+      const values = new Map(record.fields.map((field) => [field.label, field.value]));
+      lines.push([record.number, record.name, ...fieldLabels.map((label) => values.get(label) || "")].join("\t"));
+    });
+    return lines.join("\n");
+  }
+
+  function normalizeStudentNames(input, students) {
+    return normalizeStudentData(input, students);
   }
 
   function secureRandomInt(maxExclusive) {
@@ -122,7 +179,7 @@
       emptyNumbers: String(config.emptyNumbers || "").trim(),
       femaleStart: clampInteger(config.femaleStart, 1, maxNumber + 1, Math.min(21, maxNumber + 1)),
       displayMode,
-      studentNames: String(config.studentNames || "").slice(0, 20000)
+      studentData: String(config.studentData !== undefined ? config.studentData : config.studentNames || "").slice(0, 50000)
     };
   }
 
@@ -219,7 +276,10 @@
     clampInteger,
     parseEmptyNumbers,
     buildStudents,
+    parseStudentRecords,
     parseStudentNames,
+    normalizeStudentData,
+    normalizeStudentNames,
     secureShuffle,
     isCompatible,
     nextSeatType,

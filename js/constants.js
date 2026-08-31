@@ -21,7 +21,7 @@
       emptyNumbers: "16-20",
       femaleStart: 21,
       displayMode: "number",
-      studentNames: ""
+      studentData: ""
     })
   });
 
