@@ -223,8 +223,35 @@
     "hidden"
   ];
 
+  const CLOCKWISE_ROOM_POSITIONS = {
+    "top-start": "right-start",
+    "top-center": "right-center",
+    "top-end": "right-end",
+    "right-start": "bottom-end",
+    "right-center": "bottom-center",
+    "right-end": "bottom-start",
+    "bottom-start": "left-start",
+    "bottom-center": "left-center",
+    "bottom-end": "left-end",
+    "left-start": "top-end",
+    "left-center": "top-center",
+    "left-end": "top-start",
+    hidden: "hidden"
+  };
+
+  const COUNTERCLOCKWISE_ROOM_POSITIONS = Object.fromEntries(
+    Object.entries(CLOCKWISE_ROOM_POSITIONS).map(([position, rotatedPosition]) => [rotatedPosition, position])
+  );
+
   function normalizeRoomPosition(value, fallback) {
     return ROOM_POSITIONS.includes(value) ? value : fallback;
+  }
+
+  function rotateRoomPosition(value, direction, fallback) {
+    const position = normalizeRoomPosition(value, fallback);
+    if (direction === "clockwise") return CLOCKWISE_ROOM_POSITIONS[position];
+    if (direction === "counterclockwise") return COUNTERCLOCKWISE_ROOM_POSITIONS[position];
+    throw new Error("Unsupported rotation direction");
   }
 
   function normalizeConfig(config) {
@@ -271,8 +298,9 @@
     const counterclockwise = direction === "counterclockwise";
     if (!clockwise && !counterclockwise) throw new Error("Unsupported rotation direction");
 
-    const oldRows = clampInteger(config.rows, 1, 12, 8);
-    const oldCols = clampInteger(config.cols, 1, 12, 4);
+    const currentConfig = normalizeConfig(config);
+    const oldRows = currentConfig.rows;
+    const oldCols = currentConfig.cols;
     const idMap = new Map();
     const rotatedSeats = (seats || []).map((seat) => {
       const row = clockwise ? seat.col : oldCols - 1 - seat.col;
@@ -289,7 +317,14 @@
     });
 
     return {
-      config: { ...config, rows: oldCols, cols: oldRows },
+      config: {
+        ...currentConfig,
+        rows: oldCols,
+        cols: oldRows,
+        boardPosition: rotateRoomPosition(currentConfig.boardPosition, direction, "top-center"),
+        doorPosition: rotateRoomPosition(currentConfig.doorPosition, direction, "right-end"),
+        teacherPosition: rotateRoomPosition(currentConfig.teacherPosition, direction, "top-end")
+      },
       seats: rotatedSeats,
       assignment: rotatedAssignment,
       idMap
@@ -381,6 +416,7 @@
     nextSeatType,
     ROOM_POSITIONS,
     normalizeRoomPosition,
+    rotateRoomPosition,
     normalizeConfig,
     buildSeatGrid,
     rotateSeatLayout,

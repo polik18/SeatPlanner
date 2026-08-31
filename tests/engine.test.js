@@ -137,7 +137,7 @@ assert.equal(sanitizedRoomConfig.boardPosition, "top-center");
 assert.equal(sanitizedRoomConfig.doorPosition, "hidden");
 assert.equal(sanitizedRoomConfig.teacherPosition, "left-center");
 
-const rotationConfig = engine.normalizeConfig({ rows: 2, cols: 3, maxNumber: 4, boardPosition: "bottom-center" });
+const rotationConfig = engine.normalizeConfig({ rows: 2, cols: 3, maxNumber: 4, boardPosition: "bottom-center", doorPosition: "right-start", teacherPosition: "hidden" });
 const rotationSeats = engine.buildSeatGrid(rotationConfig, []);
 rotationSeats.find((seat) => seat.id === "0-0").type = "male";
 rotationSeats.find((seat) => seat.id === "0-0").pin = 1;
@@ -146,7 +146,9 @@ const rotationAssignment = { "0-0": 1, "0-1": 2, "0-2": null, "1-0": 3, "1-1": 4
 const clockwiseRotation = engine.rotateSeatLayout(rotationConfig, rotationSeats, rotationAssignment, "clockwise");
 assert.equal(clockwiseRotation.config.rows, 3);
 assert.equal(clockwiseRotation.config.cols, 2);
-assert.equal(clockwiseRotation.config.boardPosition, "bottom-center");
+assert.equal(clockwiseRotation.config.boardPosition, "left-center");
+assert.equal(clockwiseRotation.config.doorPosition, "bottom-end");
+assert.equal(clockwiseRotation.config.teacherPosition, "hidden");
 assert.equal(clockwiseRotation.seats.find((seat) => seat.id === "0-1").type, "male");
 assert.equal(clockwiseRotation.seats.find((seat) => seat.id === "0-1").pin, 1);
 assert.equal(clockwiseRotation.seats.find((seat) => seat.id === "2-0").type, "aisle");
@@ -156,6 +158,9 @@ assert.equal(clockwiseRotation.assignment["1-0"], 4);
 const restoredRotation = engine.rotateSeatLayout(clockwiseRotation.config, clockwiseRotation.seats, clockwiseRotation.assignment, "counterclockwise");
 assert.equal(restoredRotation.config.rows, 2);
 assert.equal(restoredRotation.config.cols, 3);
+assert.equal(restoredRotation.config.boardPosition, rotationConfig.boardPosition);
+assert.equal(restoredRotation.config.doorPosition, rotationConfig.doorPosition);
+assert.equal(restoredRotation.config.teacherPosition, rotationConfig.teacherPosition);
 rotationSeats.forEach((seat) => {
   const restored = restoredRotation.seats.find((item) => item.id === seat.id);
   assert.equal(restored.type, seat.type);
@@ -169,7 +174,16 @@ for (let turn = 0; turn < 4; turn += 1) {
 }
 assert.equal(fourTurns.config.rows, rotationConfig.rows);
 assert.equal(fourTurns.config.cols, rotationConfig.cols);
+assert.equal(fourTurns.config.boardPosition, rotationConfig.boardPosition);
+assert.equal(fourTurns.config.doorPosition, rotationConfig.doorPosition);
+assert.equal(fourTurns.config.teacherPosition, rotationConfig.teacherPosition);
 rotationSeats.forEach((seat) => assert.equal(fourTurns.seats.find((item) => item.id === seat.id).type, seat.type));
+engine.ROOM_POSITIONS.forEach((position) => {
+  let rotatedPosition = position;
+  for (let turn = 0; turn < 4; turn += 1) rotatedPosition = engine.rotateRoomPosition(rotatedPosition, "clockwise", "hidden");
+  assert.equal(rotatedPosition, position);
+  assert.equal(engine.rotateRoomPosition(engine.rotateRoomPosition(position, "clockwise", "hidden"), "counterclockwise", "hidden"), position);
+});
 const maximumRotation = engine.rotateSeatLayout({ rows: 12, cols: 10 }, engine.buildSeatGrid({ rows: 12, cols: 10 }, []), {}, "clockwise");
 assert.equal(engine.normalizeConfig(maximumRotation.config).rows, 10);
 assert.equal(engine.normalizeConfig(maximumRotation.config).cols, 12);
