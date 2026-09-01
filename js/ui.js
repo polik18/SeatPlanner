@@ -47,16 +47,27 @@
   function renderRoomMarkers(state) {
     document.querySelectorAll("[data-room-slot]").forEach((slot) => { slot.innerHTML = ""; });
     [
-      { key: "boardPosition", type: "board", icon: "▰", label: "room.board" },
-      { key: "doorPosition", type: "door", icon: "▯", label: "room.door" },
-      { key: "teacherPosition", type: "teacher", icon: "◆", label: "room.teacher" }
+      { key: "boardPosition", type: "board", icon: "▰", label: "room.board", lengthKey: "boardLength" },
+      { key: "doorPosition", type: "door", icon: "▯", label: "room.door", offsetKey: "doorOffset" },
+      { key: "teacherPosition", type: "teacher", icon: "◆", label: "room.teacher", offsetKey: "teacherOffset" }
     ].forEach((marker) => {
       const position = state.config[marker.key];
       if (position === "hidden") return;
       const slot = document.querySelector(`[data-room-slot="${position}"]`);
       if (!slot) return;
-      slot.insertAdjacentHTML("beforeend", `<span class="room-marker room-marker-${marker.type}" data-room-marker="${marker.type}"><span class="room-marker-icon" aria-hidden="true">${marker.icon}</span><span>${escapeHtml(i18n.t(marker.label))}</span></span>`);
+      const offset = marker.offsetKey ? Number(state.config[marker.offsetKey]) || 0 : 0;
+      const length = marker.lengthKey ? Number(state.config[marker.lengthKey]) || 3 : 3;
+      const boardLength = 70 + length * 34;
+      const boardSideLength = 58 + length * 27;
+      const boardMobileLength = 52 + length * 7;
+      slot.insertAdjacentHTML("beforeend", `<span class="room-marker room-marker-${marker.type}" data-room-marker="${marker.type}" style="--marker-offset:${offset}px;--board-length:${boardLength}px;--board-side-length:${boardSideLength}px;--board-mobile-length:${boardMobileLength}px"><span class="room-marker-icon" aria-hidden="true">${marker.icon}</span><span>${escapeHtml(i18n.t(marker.label))}</span></span>`);
     });
+  }
+
+  function fillRoomControlOutputs(config) {
+    document.getElementById("boardLengthOutput").textContent = `${config.boardLength} / 5`;
+    document.getElementById("doorOffsetOutput").textContent = `${config.doorOffset > 0 ? "+" : ""}${config.doorOffset} px`;
+    document.getElementById("teacherOffsetOutput").textContent = `${config.teacherOffset > 0 ? "+" : ""}${config.teacherOffset} px`;
   }
 
   function presentationStudentContent(state, number, directory) {
@@ -158,10 +169,14 @@
       displayModeInput: "displayMode",
       studentDataInput: "studentData",
       boardPositionInput: "boardPosition",
+      boardLengthInput: "boardLength",
       doorPositionInput: "doorPosition",
-      teacherPositionInput: "teacherPosition"
+      doorOffsetInput: "doorOffset",
+      teacherPositionInput: "teacherPosition",
+      teacherOffsetInput: "teacherOffset"
     };
     Object.entries(mapping).forEach(([id, key]) => { document.getElementById(id).value = state.config[key]; });
+    fillRoomControlOutputs(state.config);
   }
 
   function showToast(message, type) {
@@ -184,5 +199,5 @@
     if (main) main.innerHTML = presentationStudentContent(state, number, directory);
   }
 
-  SeatMaster.ui = { escapeHtml, columnLabel, populateRoomPositionOptions, renderRoomMarkers, renderSeatGrid, renderSummary, fillInputs, showToast, setSaveStatus, renderRollingValue };
+  SeatMaster.ui = { escapeHtml, columnLabel, populateRoomPositionOptions, renderRoomMarkers, renderSeatGrid, renderSummary, fillInputs, fillRoomControlOutputs, showToast, setSaveStatus, renderRollingValue };
 })();

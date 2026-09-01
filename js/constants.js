@@ -23,8 +23,11 @@
       displayMode: "number",
       studentData: "",
       boardPosition: "top-center",
+      boardLength: 3,
       doorPosition: "right-end",
-      teacherPosition: "top-end"
+      doorOffset: 0,
+      teacherPosition: "top-end",
+      teacherOffset: 0
     })
   });
 

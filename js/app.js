@@ -81,8 +81,11 @@
       displayMode: document.getElementById("displayModeInput").value,
       studentData: document.getElementById("studentDataInput").value,
       boardPosition: document.getElementById("boardPositionInput").value,
+      boardLength: document.getElementById("boardLengthInput").value,
       doorPosition: document.getElementById("doorPositionInput").value,
-      teacherPosition: document.getElementById("teacherPositionInput").value
+      doorOffset: document.getElementById("doorOffsetInput").value,
+      teacherPosition: document.getElementById("teacherPositionInput").value,
+      teacherOffset: document.getElementById("teacherOffsetInput").value
     });
   }
 
@@ -128,13 +131,18 @@
   function updateRoomMarkersFromInputs() {
     const config = readConfigFromInputs();
     state.config.boardPosition = config.boardPosition;
+    state.config.boardLength = config.boardLength;
     state.config.doorPosition = config.doorPosition;
+    state.config.doorOffset = config.doorOffset;
     state.config.teacherPosition = config.teacherPosition;
+    state.config.teacherOffset = config.teacherOffset;
+    ui.fillRoomControlOutputs(state.config);
     ui.renderRoomMarkers(state);
     saveSoon();
   }
 
   function rotateLayout(direction) {
+    if (document.body.classList.contains("drawing-mode")) return;
     closeStudentProfile();
     const rotated = engine.rotateSeatLayout(state.config, state.seats, state.assignment, direction);
     state.config = engine.normalizeConfig(rotated.config);
@@ -235,6 +243,7 @@
     drawTimeouts = [];
     document.body.classList.remove("drawing-mode");
     document.body.classList.remove("presentation-mode");
+    setPresentationRotationDisabled(false);
     adminMode = state.hasDrawn ? "adjust" : adminMode;
     selectedAdjustmentSeatId = null;
     render({ keepInputs: true });
@@ -322,6 +331,10 @@
     document.getElementById("soundButtonText").textContent = i18n.t(enabled ? "common.soundOn" : "common.soundOff");
   }
 
+  function setPresentationRotationDisabled(disabled) {
+    document.querySelectorAll(".presentation-rotate-button").forEach((button) => { button.disabled = disabled; });
+  }
+
   function showCountdown(reducedMotion) {
     const overlay = document.getElementById("drawCountdown");
     const text = document.getElementById("drawCountdownText");
@@ -380,6 +393,7 @@
     sound.playLaunch();
     showCountdown(reducedMotion);
     document.body.classList.add("drawing-mode");
+    setPresentationRotationDisabled(true);
     button.disabled = true;
     button.classList.add("is-drawing");
     message.textContent = i18n.t("draw.drawing");
@@ -414,6 +428,7 @@
       if (!reducedMotion) celebrate();
       button.disabled = false;
       button.classList.remove("is-drawing");
+      setPresentationRotationDisabled(false);
       document.getElementById("drawButtonText").textContent = i18n.t("draw.redraw");
       message.textContent = i18n.t("draw.done");
       saveSoon();
@@ -451,6 +466,9 @@
     });
     ["boardPositionInput", "doorPositionInput", "teacherPositionInput"].forEach((id) => {
       document.getElementById(id).addEventListener("change", updateRoomMarkersFromInputs);
+    });
+    ["boardLengthInput", "doorOffsetInput", "teacherOffsetInput"].forEach((id) => {
+      document.getElementById(id).addEventListener("input", updateRoomMarkersFromInputs);
     });
     const dataInput = document.getElementById("studentDataInput");
     dataInput.addEventListener("change", () => { normalizeStudentDataInput(false); updateFromInputs(); });
@@ -491,6 +509,8 @@
     document.getElementById("drawButton").addEventListener("click", startDraw);
     document.getElementById("rotateCounterclockwiseButton").addEventListener("click", () => rotateLayout("counterclockwise"));
     document.getElementById("rotateClockwiseButton").addEventListener("click", () => rotateLayout("clockwise"));
+    document.getElementById("presentationRotateCounterclockwiseButton").addEventListener("click", () => rotateLayout("counterclockwise"));
+    document.getElementById("presentationRotateClockwiseButton").addEventListener("click", () => rotateLayout("clockwise"));
     document.getElementById("studentProfileClose").addEventListener("click", closeStudentProfile);
     document.getElementById("studentProfileOverlay").addEventListener("click", (event) => {
       if (event.target.id === "studentProfileOverlay") closeStudentProfile();

@@ -29,6 +29,14 @@
           <span aria-hidden="true">♪</span>
           <span id="soundButtonText">音效開啟</span>
         </button>
+        <div class="presentation-rotation" role="group" aria-label="旋轉整間教室" data-i18n-aria-label="admin.rotateLayout">
+          <button class="button button-secondary presentation-rotate-button" id="presentationRotateCounterclockwiseButton" type="button">
+            <span aria-hidden="true">↶</span><span class="visually-hidden" data-i18n="admin.rotateCounterclockwise">逆時針 90°</span>
+          </button>
+          <button class="button button-secondary presentation-rotate-button" id="presentationRotateClockwiseButton" type="button">
+            <span aria-hidden="true">↷</span><span class="visually-hidden" data-i18n="admin.rotateClockwise">順時針 90°</span>
+          </button>
+        </div>
         <button class="button button-secondary" id="presentationFullscreenButton" type="button" data-i18n="common.fullscreen">全螢幕</button>
         <button class="button button-quiet" id="adminButton" type="button" data-i18n="common.exitPresentation">結束展示</button>
       </div>
@@ -128,18 +136,36 @@
               <small data-i18n="admin.roomMarkersHelp">黑板、門與老師座位可各自放在教室四周，也可隱藏。</small>
             </div>
             <div class="room-marker-fields">
-              <label class="field">
-                <span data-i18n="admin.boardPosition">黑板</span>
-                <select id="boardPositionInput" data-room-position-select></select>
-              </label>
-              <label class="field">
-                <span data-i18n="admin.doorPosition">門</span>
-                <select id="doorPositionInput" data-room-position-select></select>
-              </label>
-              <label class="field">
-                <span data-i18n="admin.teacherPosition">老師座位</span>
-                <select id="teacherPositionInput" data-room-position-select></select>
-              </label>
+              <div class="room-marker-control">
+                <label class="field">
+                  <span data-i18n="admin.boardPosition">黑板</span>
+                  <select id="boardPositionInput" data-room-position-select></select>
+                </label>
+                <label class="field range-field">
+                  <span class="range-label"><span data-i18n="admin.boardLength">黑板長度</span><output id="boardLengthOutput" for="boardLengthInput">3 / 5</output></span>
+                  <input id="boardLengthInput" type="range" min="1" max="5" step="1" value="3" />
+                </label>
+              </div>
+              <div class="room-marker-control">
+                <label class="field">
+                  <span data-i18n="admin.doorPosition">門</span>
+                  <select id="doorPositionInput" data-room-position-select></select>
+                </label>
+                <label class="field range-field">
+                  <span class="range-label"><span data-i18n="admin.positionFineTune">位置微調</span><output id="doorOffsetOutput" for="doorOffsetInput">0 px</output></span>
+                  <input id="doorOffsetInput" type="range" min="-60" max="60" step="1" value="0" />
+                </label>
+              </div>
+              <div class="room-marker-control">
+                <label class="field">
+                  <span data-i18n="admin.teacherPosition">老師座位</span>
+                  <select id="teacherPositionInput" data-room-position-select></select>
+                </label>
+                <label class="field range-field">
+                  <span class="range-label"><span data-i18n="admin.positionFineTune">位置微調</span><output id="teacherOffsetOutput" for="teacherOffsetInput">0 px</output></span>
+                  <input id="teacherOffsetInput" type="range" min="-60" max="60" step="1" value="0" />
+                </label>
+              </div>
             </div>
           </div>
 

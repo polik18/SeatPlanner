@@ -254,6 +254,15 @@
     throw new Error("Unsupported rotation direction");
   }
 
+  function rotateRoomOffset(value, position, direction) {
+    if (direction !== "clockwise" && direction !== "counterclockwise") throw new Error("Unsupported rotation direction");
+    const offset = clampInteger(value, -60, 60, 0);
+    const side = String(position || "").split("-")[0];
+    if (side === "hidden" || !offset) return offset;
+    if (direction === "clockwise") return side === "right" || side === "left" ? -offset : offset;
+    return side === "top" || side === "bottom" ? -offset : offset;
+  }
+
   function normalizeConfig(config) {
     const rows = clampInteger(config.rows, 1, 12, 8);
     const cols = clampInteger(config.cols, 1, 12, 4);
@@ -269,8 +278,11 @@
       displayMode,
       studentData: String(config.studentData !== undefined ? config.studentData : config.studentNames || "").slice(0, 50000),
       boardPosition: normalizeRoomPosition(config.boardPosition, "top-center"),
+      boardLength: clampInteger(config.boardLength, 1, 5, 3),
       doorPosition: normalizeRoomPosition(config.doorPosition, "right-end"),
-      teacherPosition: normalizeRoomPosition(config.teacherPosition, "top-end")
+      doorOffset: clampInteger(config.doorOffset, -60, 60, 0),
+      teacherPosition: normalizeRoomPosition(config.teacherPosition, "top-end"),
+      teacherOffset: clampInteger(config.teacherOffset, -60, 60, 0)
     };
   }
 
@@ -322,8 +334,11 @@
         rows: oldCols,
         cols: oldRows,
         boardPosition: rotateRoomPosition(currentConfig.boardPosition, direction, "top-center"),
+        boardLength: currentConfig.boardLength,
         doorPosition: rotateRoomPosition(currentConfig.doorPosition, direction, "right-end"),
-        teacherPosition: rotateRoomPosition(currentConfig.teacherPosition, direction, "top-end")
+        doorOffset: rotateRoomOffset(currentConfig.doorOffset, currentConfig.doorPosition, direction),
+        teacherPosition: rotateRoomPosition(currentConfig.teacherPosition, direction, "top-end"),
+        teacherOffset: rotateRoomOffset(currentConfig.teacherOffset, currentConfig.teacherPosition, direction)
       },
       seats: rotatedSeats,
       assignment: rotatedAssignment,
@@ -417,6 +432,7 @@
     ROOM_POSITIONS,
     normalizeRoomPosition,
     rotateRoomPosition,
+    rotateRoomOffset,
     normalizeConfig,
     buildSeatGrid,
     rotateSeatLayout,

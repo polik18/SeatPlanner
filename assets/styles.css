@@ -144,6 +144,8 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
 .field textarea { min-height: 96px; resize: vertical; line-height: 1.55; }
 .field .privacy-note { padding: 8px 9px; border-left: 3px solid #d29a43; color: #735b32; background: #fffaf0; }
 .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(23, 79, 60, 0.1); }
+.field input[type="range"] { min-height: 28px; padding: 0; border: 0; background: transparent; box-shadow: none; accent-color: var(--green); cursor: ew-resize; }
+.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
 
 .student-summary {
   display: grid;
@@ -172,9 +174,13 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
 .rotation-buttons .button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 7px 10px; font-size: 11px; }
 .rotation-buttons .button span[aria-hidden] { color: var(--orange); font-size: 18px; line-height: 1; }
 .room-marker-heading { margin-bottom: 11px; }
-.room-marker-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.room-marker-fields { display: grid; gap: 9px; }
+.room-marker-control { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); gap: 8px; padding-top: 9px; border-top: 1px dashed rgba(23,79,60,.12); }
+.room-marker-control:first-child { padding-top: 0; border-top: 0; }
 .room-marker-fields .field { min-width: 0; margin-bottom: 0; }
 .room-marker-fields .field select { padding-right: 4px; font-size: 10px; }
+.range-label { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.range-label output { flex-shrink: 0; color: var(--orange); font-size: 9px; font-weight: 850; font-variant-numeric: tabular-nums; }
 .compact-section { margin-bottom: 8px; }
 .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
@@ -259,6 +265,8 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
 .room-slot { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; min-width: 0; min-height: 38px; gap: 4px; }
 .room-edge-left .room-slot, .room-edge-right .room-slot { flex-direction: column; }
 .room-marker {
+  --marker-offset: 0px;
+  --marker-translate: translateX(var(--marker-offset));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -276,11 +284,24 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
   line-height: 1.15;
   text-align: center;
   white-space: nowrap;
+  transform: var(--marker-translate);
 }
 .room-marker-icon { color: var(--orange); font-size: 15px; line-height: 1; }
+.room-marker-board {
+  width: var(--board-length, 172px);
+  max-width: none;
+  flex-shrink: 0;
+  border-color: #123b2d;
+  border-radius: 7px;
+  color: #f7fbf8;
+  background: linear-gradient(155deg, #245d48, #153e30);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.07), 0 5px 13px rgba(18,59,45,.16);
+}
+.room-marker-board .room-marker-icon { color: #f4d8a8; }
 .room-marker-door { border-color: rgba(231,119,50,.22); color: #9b4e1e; background: #fff7f1; }
 .room-marker-teacher { border-color: rgba(71,115,153,.22); color: #355d7d; background: #f2f7fb; }
-.room-edge-left .room-marker, .room-edge-right .room-marker { flex-direction: column; padding: 7px 5px; white-space: normal; }
+.room-edge-left .room-marker, .room-edge-right .room-marker { --marker-translate: translateY(var(--marker-offset)); flex-direction: column; padding: 7px 5px; white-space: normal; }
+.room-edge-left .room-marker-board, .room-edge-right .room-marker-board { width: calc(100% - 6px); height: var(--board-side-length, 139px); max-width: 72px; }
 .grid-scroll { position: relative; z-index: 2; grid-area: grid; min-width: 0; overflow: auto; padding: 3px 3px 16px; }
 .room-layout.is-rotating .seat-grid { animation: layoutRotatePulse 320ms cubic-bezier(.2,.8,.2,1); }
 .seat-grid {
@@ -439,9 +460,17 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
 .spark-one { top: 9%; left: 9%; font-size: 18px; }
 .spark-two { top: 21%; right: 8%; font-size: 12px; animation-delay: -1.8s; }
 .spark-three { bottom: 17%; left: 5%; font-size: 28px; color: rgba(23,79,60,.28); animation-delay: -3s; }
-.presentation-mode .room-marker { border-color: rgba(23,79,60,.14); background: rgba(250,253,251,.88); animation: markerEnter 560ms 100ms ease-out both; }
+.presentation-mode .room-marker { animation: markerEnter 560ms 100ms ease-out both; }
+.presentation-mode .room-marker:not(.room-marker-board) { border-color: rgba(23,79,60,.14); background: rgba(250,253,251,.88); }
+.presentation-mode .room-marker-board { border-color: rgba(18,59,45,.45); background: linear-gradient(155deg, rgba(36,93,72,.96), rgba(21,62,48,.96)); }
 .presentation-mode .room-marker-door { border-color: rgba(231,119,50,.2); background: rgba(255,248,242,.9); }
 .presentation-mode .room-marker-teacher { border-color: rgba(71,115,153,.18); background: rgba(244,249,252,.9); }
+
+.presentation-rotation { display: inline-flex; overflow: hidden; border: 1px solid #cfd8d3; border-radius: 9px; background: white; }
+.presentation-rotate-button { min-width: 39px; padding: 7px 10px; border: 0; border-radius: 0; box-shadow: none; }
+.presentation-rotate-button + .presentation-rotate-button { border-left: 1px solid #dbe2de; }
+.presentation-rotate-button > span[aria-hidden] { color: var(--orange); font-size: 19px; line-height: 1; }
+.presentation-rotate-button:disabled { cursor: wait; opacity: .45; }
 
 .sound-button { gap: 7px; min-width: 104px; color: var(--green); }
 .language-button { min-width: 52px; }
@@ -593,7 +622,7 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
 @keyframes numberFlip { from { transform: translateY(-2px) scale(.97); opacity: .65; } to { transform: translateY(2px) scale(1.03); opacity: 1; } }
 @keyframes numberGlow { 0% { color: var(--orange); text-shadow: 0 0 22px rgba(231,119,50,.75); } 100% { color: var(--ink); text-shadow: none; } }
 @keyframes headingEnter { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: none; } }
-@keyframes markerEnter { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: none; } }
+@keyframes markerEnter { from { opacity: 0; transform: var(--marker-translate) scale(.82); } to { opacity: 1; transform: var(--marker-translate) scale(1); } }
 @keyframes layoutRotatePulse { 0% { opacity: .35; transform: scale(.96); } 100% { opacity: 1; transform: none; } }
 @keyframes auroraFloat { to { transform: translate(38px, 24px) scale(1.12); } }
 @keyframes sparkFloat { 0%,100% { transform: translateY(0) rotate(0); opacity: .25; } 50% { transform: translateY(-12px) rotate(45deg); opacity: .7; } }
@@ -656,9 +685,10 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
   .admin-mode-bar { align-items: stretch; flex-direction: column; }
   .mode-tabs { display: grid; grid-template-columns: repeat(3, 1fr); }
   .mode-guidance { text-align: left; }
-  .room-marker-fields { grid-template-columns: 1fr; }
+  .room-marker-control { grid-template-columns: 1fr; }
   .room-layout { grid-template-columns: 50px minmax(0, 1fr) 50px; gap: 5px; }
   .room-marker { gap: 3px; padding: 5px 6px; font-size: 8px; }
+  .room-edge-top .room-marker-board, .room-edge-bottom .room-marker-board { width: var(--board-mobile-length, 73px); }
   .room-marker-icon { font-size: 12px; }
   .profile-fields { grid-template-columns: 1fr; }
   .student-profile-card { min-height: 480px; }
