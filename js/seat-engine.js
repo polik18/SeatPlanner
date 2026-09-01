@@ -215,6 +215,86 @@
     return SEAT_TYPES[(index + 1 + SEAT_TYPES.length) % SEAT_TYPES.length];
   }
 
+  const GENDER_PATTERNS = ["rows", "columns", "checkerboard"];
+
+  function genderPatternParity(seat, pattern) {
+    if (pattern === "rows") return seat.row % 2;
+    if (pattern === "columns") return seat.col % 2;
+    if (pattern === "checkerboard") return (seat.row + seat.col) % 2;
+    throw new Error("Unsupported gender pattern");
+  }
+
+  function applyGenderPattern(config, seats, pattern) {
+    if (!GENDER_PATTERNS.includes(pattern)) throw new Error("Unsupported gender pattern");
+    const students = buildStudents(config);
+    const studentByNumber = new Map(students.map((student) => [student.number, student]));
+    const usableCount = (seats || []).filter((seat) => seat.type !== "aisle").length;
+    const genderCounts = {
+      male: students.filter((student) => student.gender === "male").length,
+      female: students.filter((student) => student.gender === "female").length
+    };
+
+    function candidate(startGender) {
+      const otherGender = startGender === "male" ? "female" : "male";
+      const mapped = (seats || []).map((seat) => {
+        if (seat.type === "aisle") return { ...seat, pin: null };
+        return { ...seat, type: genderPatternParity(seat, pattern) ? otherGender : startGender };
+      });
+      const slotCounts = {
+        male: mapped.filter((seat) => seat.type === "male").length,
+        female: mapped.filter((seat) => seat.type === "female").length
+      };
+      const shortage = {
+        male: Math.max(0, genderCounts.male - slotCounts.male),
+        female: Math.max(0, genderCounts.female - slotCounts.female)
+      };
+      const pinConflicts = mapped.filter((seat) => {
+        if (!seat.pin) return false;
+        const student = studentByNumber.get(seat.pin);
+        return !student || !isCompatible(seat, student);
+      }).length;
+      return { mapped, shortage, score: (shortage.male + shortage.female) * 1000 + pinConflicts, startGender };
+    }
+
+    const maleFirst = candidate("male");
+    const femaleFirst = candidate("female");
+    const selected = femaleFirst.score < maleFirst.score ? femaleFirst : maleFirst;
+    let relaxedSeats = 0;
+
+    if (usableCount >= students.length) {
+      ["male", "female"].forEach((neededGender) => {
+        let remaining = selected.shortage[neededGender];
+        if (!remaining) return;
+        const replaceGender = neededGender === "male" ? "female" : "male";
+        selected.mapped
+          .filter((seat) => seat.type === replaceGender)
+          .sort((left, right) => {
+            const leftPinnedMatch = studentByNumber.get(left.pin)?.gender === neededGender ? 1 : 0;
+            const rightPinnedMatch = studentByNumber.get(right.pin)?.gender === neededGender ? 1 : 0;
+            return rightPinnedMatch - leftPinnedMatch || right.row - left.row || right.col - left.col;
+          })
+          .forEach((seat) => {
+            if (!remaining) return;
+            seat.type = "general";
+            remaining -= 1;
+            relaxedSeats += 1;
+          });
+      });
+    }
+
+    const clearedPins = [];
+    selected.mapped.forEach((seat) => {
+      if (!seat.pin) return;
+      const student = studentByNumber.get(seat.pin);
+      if (!student || !isCompatible(seat, student)) {
+        clearedPins.push(seat.pin);
+        seat.pin = null;
+      }
+    });
+
+    return { seats: selected.mapped, startGender: selected.startGender, relaxedSeats, clearedPins };
+  }
+
   const ROOM_POSITIONS = [
     "top-start", "top-center", "top-end",
     "right-start", "right-center", "right-end",
@@ -429,6 +509,9 @@
     secureShuffle,
     isCompatible,
     nextSeatType,
+    GENDER_PATTERNS,
+    genderPatternParity,
+    applyGenderPattern,
     ROOM_POSITIONS,
     normalizeRoomPosition,
     rotateRoomPosition,

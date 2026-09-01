@@ -128,6 +128,40 @@ const expandedSeats = engine.buildSeatGrid({ ...dynamicConfig, rows: 5, cols: 6 
 assert.equal(expandedSeats.length, 30);
 assert.equal(expandedSeats.find((seat) => seat.id === "0-0").type, "male");
 
+const balancedPatternConfig = engine.normalizeConfig({ rows: 4, cols: 4, maxNumber: 16, femaleStart: 9 });
+const balancedPatternSeats = engine.buildSeatGrid(balancedPatternConfig, []);
+const rowPattern = engine.applyGenderPattern(balancedPatternConfig, balancedPatternSeats, "rows");
+assert.equal(rowPattern.startGender, "male");
+assert.equal(rowPattern.relaxedSeats, 0);
+rowPattern.seats.forEach((seat) => assert.equal(seat.type, seat.row % 2 ? "female" : "male"));
+const columnPattern = engine.applyGenderPattern(balancedPatternConfig, balancedPatternSeats, "columns");
+columnPattern.seats.forEach((seat) => assert.equal(seat.type, seat.col % 2 ? "female" : "male"));
+const checkerPattern = engine.applyGenderPattern(balancedPatternConfig, balancedPatternSeats, "checkerboard");
+checkerPattern.seats.forEach((seat) => assert.equal(seat.type, (seat.row + seat.col) % 2 ? "female" : "male"));
+
+const unevenPatternConfig = engine.normalizeConfig({ rows: 3, cols: 4, maxNumber: 10, femaleStart: 9 });
+const unevenPatternSeats = engine.buildSeatGrid(unevenPatternConfig, []);
+const relaxedCheckerPattern = engine.applyGenderPattern(unevenPatternConfig, unevenPatternSeats, "checkerboard");
+assert.equal(relaxedCheckerPattern.relaxedSeats, 2);
+assert.equal(relaxedCheckerPattern.seats.filter((seat) => seat.type === "general").length, 2);
+assert.equal(engine.validate({ config: unevenPatternConfig, seats: relaxedCheckerPattern.seats }).valid, true);
+assert.equal(Object.values(engine.arrange({ config: unevenPatternConfig, seats: relaxedCheckerPattern.seats })).filter(Number.isInteger).length, 10);
+
+const aislePatternSeats = engine.buildSeatGrid({ ...unevenPatternConfig, rows: 3, cols: 4 }, []);
+aislePatternSeats[0].type = "aisle";
+const aislePattern = engine.applyGenderPattern({ ...unevenPatternConfig, maxNumber: 9 }, aislePatternSeats, "columns");
+assert.equal(aislePattern.seats[0].type, "aisle");
+
+const pinnedPatternConfig = engine.normalizeConfig({ rows: 2, cols: 2, maxNumber: 4, femaleStart: 3 });
+const pinnedPatternSeats = engine.buildSeatGrid(pinnedPatternConfig, []);
+pinnedPatternSeats.find((seat) => seat.id === "0-0").pin = 1;
+pinnedPatternSeats.find((seat) => seat.id === "1-1").pin = 3;
+const pinnedPattern = engine.applyGenderPattern(pinnedPatternConfig, pinnedPatternSeats, "checkerboard");
+assert.equal(Array.from(pinnedPattern.clearedPins).join(","), "3");
+assert.equal(pinnedPattern.seats.find((seat) => seat.id === "0-0").pin, 1);
+assert.equal(pinnedPattern.seats.find((seat) => seat.id === "1-1").pin, null);
+assert.throws(() => engine.applyGenderPattern(balancedPatternConfig, balancedPatternSeats, "diagonal"), /Unsupported gender pattern/);
+
 const legacyRoomConfig = engine.normalizeConfig({ rows: 2, cols: 3, maxNumber: 4 });
 assert.equal(legacyRoomConfig.boardPosition, "top-center");
 assert.equal(legacyRoomConfig.boardLength, 3);

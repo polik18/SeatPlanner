@@ -189,6 +189,23 @@
     saveSoon();
   }
 
+  function applyGenderPattern(pattern) {
+    closeStudentProfile();
+    const result = engine.applyGenderPattern(state.config, state.seats, pattern);
+    state.seats = result.seats;
+    state.assignment = {};
+    state.hasDrawn = false;
+    selectedAdjustmentSeatId = null;
+    adminMode = "layout";
+    render({ keepInputs: true });
+    saveSoon();
+    const patternKeys = { rows: "admin.genderRows", columns: "admin.genderColumns", checkerboard: "admin.genderCheckerboard" };
+    const messages = [i18n.t("toast.genderPatternApplied", { pattern: i18n.t(patternKeys[pattern]) })];
+    if (result.relaxedSeats) messages.push(i18n.t("toast.genderPatternRelaxed", { count: result.relaxedSeats }));
+    if (result.clearedPins.length) messages.push(i18n.t("toast.genderPatternPinsCleared", { count: result.clearedPins.length }));
+    ui.showToast(messages.join(" "));
+  }
+
   function openPinDialog(seatId) {
     const seat = state.seats.find((item) => item.id === seatId);
     if (!seat || seat.type === "aisle") return;
@@ -511,6 +528,9 @@
     document.getElementById("rotateClockwiseButton").addEventListener("click", () => rotateLayout("clockwise"));
     document.getElementById("presentationRotateCounterclockwiseButton").addEventListener("click", () => rotateLayout("counterclockwise"));
     document.getElementById("presentationRotateClockwiseButton").addEventListener("click", () => rotateLayout("clockwise"));
+    document.querySelectorAll("[data-gender-pattern]").forEach((button) => {
+      button.addEventListener("click", () => applyGenderPattern(button.dataset.genderPattern));
+    });
     document.getElementById("studentProfileClose").addEventListener("click", closeStudentProfile);
     document.getElementById("studentProfileOverlay").addEventListener("click", (event) => {
       if (event.target.id === "studentProfileOverlay") closeStudentProfile();
