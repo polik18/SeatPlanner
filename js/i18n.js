@@ -6,6 +6,7 @@
   const dictionaries = {
     "zh-Hant": {
       "app.title": "Classroom Seat Master｜班級座位編排",
+      "validation.collapse": "收合", "validation.expand": "查看問題",
       "common.saved": "已儲存於本機", "common.saving": "儲存中…", "common.fullscreen": "全螢幕", "common.presentation": "進入展示模式", "common.returnResult": "返回展示結果", "common.exitPresentation": "結束展示", "common.cancel": "取消", "common.apply": "套用",
       "common.soundOn": "音效開啟", "common.soundOff": "音效關閉", "common.untitled": "未命名班級",
       "admin.basic": "基本資料", "admin.classAndStudents": "班級與人數", "admin.className": "班級名稱", "admin.classNameHelp": "可輸入任意班級名稱，標題與匯出檔名會自動同步。", "admin.maxNumber": "最大座號", "admin.femaleStart": "女生起始座號", "admin.emptyNumbers": "缺號／空號", "admin.emptyPlaceholder": "例：16-20, 25", "admin.emptyHelp": "支援逗號、空白與區間，例如 16-20, 25", "admin.displayContent": "展示內容", "admin.numberOnly": "只顯示座號", "admin.nameOnly": "只顯示姓名", "admin.numberAndName": "座號＋姓名",
@@ -25,6 +26,7 @@
     },
     en: {
       "app.title": "Classroom Seat Master",
+      "validation.collapse": "Collapse", "validation.expand": "View issues",
       "common.saved": "Saved locally", "common.saving": "Saving…", "common.fullscreen": "Fullscreen", "common.presentation": "Present", "common.returnResult": "Return to result", "common.exitPresentation": "Exit presentation", "common.cancel": "Cancel", "common.apply": "Apply",
       "common.soundOn": "Sound on", "common.soundOff": "Sound off", "common.untitled": "Untitled class",
       "admin.basic": "BASIC INFO", "admin.classAndStudents": "Class & Students", "admin.className": "Class name", "admin.classNameHelp": "Enter any class name. Titles and export filenames update automatically.", "admin.maxNumber": "Highest student number", "admin.femaleStart": "First female student number", "admin.emptyNumbers": "Unused numbers", "admin.emptyPlaceholder": "e.g. 16-20, 25", "admin.emptyHelp": "Supports commas, spaces, and ranges such as 16-20, 25", "admin.displayContent": "Display format", "admin.numberOnly": "Student number only", "admin.nameOnly": "Name only", "admin.numberAndName": "Number + name",

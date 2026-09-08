@@ -48,6 +48,7 @@
     ui.renderRoomMarkers(state);
     ui.renderSeatGrid(state, presentation, adminMode, selectedAdjustmentSeatId);
     updateAdminModeUI();
+    ui.positionValidationNotice();
   }
 
   function updateAdminModeUI() {
@@ -165,6 +166,7 @@
   function cycleSeat(seatId) {
     const seat = state.seats.find((item) => item.id === seatId);
     if (!seat) return;
+    ui.setValidationAnchor(`.seat[data-seat-id="${seatId}"]`);
     seat.type = engine.nextSeatType(seat.type);
     if (seat.type === "aisle") seat.pin = null;
     state.assignment = {};
@@ -175,6 +177,7 @@
   }
 
   function cycleAxis(axis, index) {
+    ui.setValidationAnchor(`[data-axis="${axis}"][data-index="${index}"]`);
     const seats = state.seats.filter((seat) => seat[axis] === index);
     if (!seats.length) return;
     const nextType = engine.nextSeatType(seats[0].type);
@@ -210,6 +213,7 @@
     const seat = state.seats.find((item) => item.id === seatId);
     if (!seat || seat.type === "aisle") return;
     activePinSeatId = seatId;
+    ui.setValidationAnchor(`.seat[data-seat-id="${seatId}"]`);
     const students = engine.buildStudents(state.config);
     const usedNumbers = new Set(state.seats.filter((item) => item.id !== seatId && item.pin).map((item) => item.pin));
     const available = students.filter((student) => !usedNumbers.has(student.number) && engine.isCompatible(seat, student));
@@ -217,7 +221,14 @@
     select.innerHTML = `<option value="">${ui.escapeHtml(i18n.t("pin.random"))}</option>${available.map((student) => `<option value="${student.number}">${ui.escapeHtml(i18n.t("pin.option", { number: student.number }))}</option>`).join("")}`;
     select.value = seat.pin || "";
     document.getElementById("pinDialogTitle").textContent = i18n.t("pin.title", { seat: `${ui.columnLabel(seat.col)}${seat.row + 1}` });
+    previewPin();
     document.getElementById("pinDialog").showModal();
+  }
+
+  function previewPin() {
+    const value = Number.parseInt(document.getElementById("pinStudentSelect").value, 10);
+    const seats = state.seats.map((seat) => seat.id === activePinSeatId ? { ...seat, pin: Number.isInteger(value) ? value : null } : seat);
+    ui.renderValidation(engine.validate({ ...state, seats }), document.getElementById("pinValidationPanel"));
   }
 
   function applyPin() {
@@ -230,14 +241,15 @@
     selectedAdjustmentSeatId = null;
     render({ keepInputs: true });
     saveSoon();
-    ui.showToast(seat.pin ? i18n.t("toast.pinned", { number: seat.pin }) : i18n.t("toast.unpinned"));
+    if (engine.validate(state).valid) ui.showToast(seat.pin ? i18n.t("toast.pinned", { number: seat.pin }) : i18n.t("toast.unpinned"));
   }
 
   function enterPresentation() {
     const report = engine.validate(state);
     if (!report.valid) {
       ui.showToast(i18n.t("toast.fixFirst"), "error");
-      document.getElementById("validationPanel").scrollIntoView({ behavior: "smooth", block: "center" });
+      ui.setValidationAnchor("#presentationButton");
+      ui.renderSummary(state);
       return;
     }
     if (!state.hasDrawn) {
@@ -478,6 +490,21 @@
   }
 
   function bindEvents() {
+    let noticeFrame = null;
+    const positionNotice = () => {
+      if (noticeFrame !== null) return;
+      noticeFrame = window.requestAnimationFrame(() => { noticeFrame = null; ui.positionValidationNotice(); });
+    };
+    document.addEventListener("scroll", positionNotice, { capture: true, passive: true });
+    window.addEventListener("resize", positionNotice);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", positionNotice);
+      window.visualViewport.addEventListener("scroll", positionNotice);
+    }
+    document.getElementById("validationToggle").addEventListener("click", ui.toggleValidationNotice);
+    document.querySelector(".control-panel").addEventListener("input", () => ui.setValidationAnchor(null), true);
+    document.getElementById("pinStudentSelect").addEventListener("change", previewPin);
+    document.getElementById("pinDialog").addEventListener("close", positionNotice);
     ["classNameInput", "rowsInput", "colsInput", "maxNumberInput", "emptyNumbersInput", "femaleStartInput", "displayModeInput"].forEach((id) => {
       document.getElementById(id).addEventListener("change", updateFromInputs);
     });
@@ -591,10 +618,6 @@
   }
 
   function init() {
-    const header = document.querySelector(".app-header");
-    const updateHeaderHeight = () => document.documentElement.style.setProperty("--app-header-height", `${header.getBoundingClientRect().height}px`);
-    updateHeaderHeight();
-    new ResizeObserver(updateHeaderHeight).observe(header);
     state = hydrate(storage.load() || SeatMaster.createDefaultState());
     i18n.apply();
     ui.populateRoomPositionOptions();

@@ -251,8 +251,6 @@
           </div>
         </div>
 
-        <div id="validationPanel" class="validation-panel admin-only" role="alert" aria-atomic="true" hidden></div>
-
         <div class="room-layout" id="roomLayout">
           <div class="room-edge room-edge-top">
             <div class="room-slot" data-room-slot="top-start"></div>
@@ -308,6 +306,7 @@
           <select id="pinStudentSelect"></select>
           <small id="pinHelp" data-i18n="pin.help">固定設定只會在管理模式顯示。</small>
         </label>
+        <div id="pinValidationPanel" class="validation-panel" role="status" aria-live="polite" aria-atomic="true" hidden></div>
         <div class="dialog-actions">
           <button class="button button-secondary" value="cancel" type="submit" data-i18n="common.cancel">取消</button>
           <button class="button button-primary" id="confirmPinButton" value="default" type="submit" data-i18n="common.apply">套用</button>
@@ -340,6 +339,13 @@
       </div>
     </div>
 
+    <aside id="validationNotice" class="validation-notice admin-only" hidden>
+      <button id="validationToggle" class="validation-toggle" type="button" aria-controls="validationPanel" aria-expanded="true">
+        <strong id="validationNoticeTitle"></strong>
+        <span id="validationToggleLabel"></span>
+      </button>
+      <div id="validationPanel" class="validation-panel" role="alert" aria-atomic="true" hidden></div>
+    </aside>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script src="js/constants.js"></script>

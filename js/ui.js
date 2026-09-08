@@ -4,6 +4,66 @@
   const SeatMaster = (window.SeatMaster = window.SeatMaster || {});
   const i18n = SeatMaster.i18n;
   let toastTimer = null;
+  let validationAnchor = null;
+  let validationExpanded = true;
+  let validationMessage = "";
+
+  function setValidationAnchor(selector) {
+    validationAnchor = selector;
+    validationExpanded = true;
+  }
+
+  function renderValidation(report, panel) {
+    const message = report.valid ? "" : `<ul>${report.errors.map((error) => `<li>${escapeHtml(error)}</li>`).join("")}</ul>`;
+    panel.hidden = report.valid;
+    if (panel.innerHTML !== message) panel.innerHTML = message;
+  }
+
+  function updateValidationNotice() {
+    const notice = document.getElementById("validationNotice");
+    notice.classList.toggle("is-collapsed", !validationExpanded);
+    document.getElementById("validationPanel").hidden = notice.hidden || !validationExpanded;
+    document.getElementById("validationToggle").setAttribute("aria-expanded", String(validationExpanded));
+    document.getElementById("validationToggleLabel").textContent = i18n.t(validationExpanded ? "validation.collapse" : "validation.expand");
+    positionValidationNotice();
+  }
+
+  function toggleValidationNotice() {
+    validationExpanded = !validationExpanded;
+    updateValidationNotice();
+  }
+
+  function positionValidationNotice() {
+    const notice = document.getElementById("validationNotice");
+    if (notice.hidden || document.body.classList.contains("presentation-mode")) return;
+    const viewport = window.visualViewport;
+    const left = (viewport ? viewport.offsetLeft : 0) + 12;
+    const right = left + (viewport ? viewport.width : window.innerWidth) - 24;
+    const bottom = (viewport ? viewport.offsetTop + viewport.height : window.innerHeight) - 12;
+    const top = Math.max(viewport ? viewport.offsetTop : 0, document.querySelector(".app-header").getBoundingClientRect().bottom) + 12;
+    notice.style.maxWidth = `${Math.max(0, right - left)}px`;
+    const panel = document.getElementById("validationPanel");
+    panel.style.maxHeight = `${Math.max(40, Math.min(window.innerHeight * 0.3, bottom - top - 60))}px`;
+    const { width, height } = notice.getBoundingClientRect();
+    const anchor = validationAnchor && document.querySelector(validationAnchor);
+    const rect = anchor && anchor.getBoundingClientRect();
+    let point = { x: right - width, y: Math.max(top, bottom - height - 56) };
+    if (validationExpanded && rect && rect.bottom > top && rect.top < bottom && rect.right > left && rect.left < right) {
+      const x = Math.max(left, Math.min(rect.left + (rect.width - width) / 2, right - width));
+      const y = Math.max(top, Math.min(rect.top + (rect.height - height) / 2, bottom - height));
+      const candidates = [
+        { x: rect.right + 12, y },
+        { x: rect.left - width - 12, y },
+        { x, y: rect.top - height - 12 },
+        { x, y: rect.bottom + 12 }
+      ];
+      point = candidates.find((item) => item.x >= left && item.x + width <= right && item.y >= top && item.y + height <= bottom) || point;
+    }
+    notice.style.left = `${point.x}px`;
+    notice.style.top = `${point.y}px`;
+    notice.style.right = "auto";
+    notice.style.bottom = "auto";
+  }
 
   function escapeHtml(value) {
     return String(value)
@@ -154,9 +214,13 @@
     badge.textContent = report.valid ? i18n.t("stage.valid") : i18n.t("stage.errors", { count: report.errors.length });
     badge.classList.toggle("is-error", !report.valid);
     const panel = document.getElementById("validationPanel");
-    panel.hidden = report.valid;
-    const message = report.valid ? "" : `<strong>${escapeHtml(i18n.t("stage.errors", { count: report.errors.length }))}</strong><ul>${report.errors.map((error) => `<li>${escapeHtml(error)}</li>`).join("")}</ul>`;
-    if (panel.innerHTML !== message) panel.innerHTML = message;
+    const message = report.errors.join("\n");
+    if (message !== validationMessage) validationExpanded = true;
+    validationMessage = message;
+    document.getElementById("validationNotice").hidden = report.valid;
+    document.getElementById("validationNoticeTitle").textContent = i18n.t("stage.errors", { count: report.errors.length });
+    renderValidation(report, panel);
+    updateValidationNotice();
   }
 
   function fillInputs(state) {
@@ -200,5 +264,5 @@
     if (main) main.innerHTML = presentationStudentContent(state, number, directory);
   }
 
-  SeatMaster.ui = { escapeHtml, columnLabel, populateRoomPositionOptions, renderRoomMarkers, renderSeatGrid, renderSummary, fillInputs, fillRoomControlOutputs, showToast, setSaveStatus, renderRollingValue };
+  SeatMaster.ui = { escapeHtml, columnLabel, populateRoomPositionOptions, renderRoomMarkers, renderSeatGrid, renderSummary, fillInputs, fillRoomControlOutputs, showToast, setSaveStatus, renderRollingValue, renderValidation, setValidationAnchor, positionValidationNotice, toggleValidationNotice };
 })();
