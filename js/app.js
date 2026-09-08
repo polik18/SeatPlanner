@@ -6,8 +6,7 @@
   let state = SeatMaster.createDefaultState();
   let activePinSeatId = null;
   let saveTimer = null;
-  let drawingTimer = null;
-  let drawTimeouts = [];
+  let seatTimeline = null;
   let adminMode = "layout";
   let selectedAdjustmentSeatId = null;
   let profileFlipTimer = null;
@@ -267,9 +266,9 @@
 
   function exitPresentation() {
     closeStudentProfile();
-    window.clearInterval(drawingTimer);
-    drawTimeouts.forEach(window.clearTimeout);
-    drawTimeouts = [];
+    if (seatTimeline) seatTimeline.cancel();
+    seatTimeline = null;
+    resetDrawEffects();
     document.body.classList.remove("drawing-mode");
     document.body.classList.remove("presentation-mode");
     setPresentationRotationDisabled(false);
@@ -283,6 +282,7 @@
   }
 
   function openStudentProfile(seatId) {
+    if (document.body.classList.contains("drawing-mode")) return;
     if (!state.hasDrawn) return;
     const number = state.assignment[seatId];
     if (!Number.isInteger(number)) return;
@@ -361,47 +361,21 @@
   }
 
   function setPresentationRotationDisabled(disabled) {
-    document.querySelectorAll(".presentation-rotate-button").forEach((button) => { button.disabled = disabled; });
+    document.querySelectorAll(".presentation-rotate-button, .student-draw-open, .presentation-only .language-button").forEach((button) => { button.disabled = disabled; });
   }
 
-  function showCountdown(reducedMotion) {
-    const overlay = document.getElementById("drawCountdown");
-    const text = document.getElementById("drawCountdownText");
-    if (reducedMotion) return;
-    overlay.classList.add("is-active");
-    [["3", 0], ["2", 400], ["1", 800], ["GO", 1200]].forEach(([value, delay]) => {
-      drawTimeouts.push(window.setTimeout(() => {
-        text.textContent = value === "GO" ? i18n.t("draw.go") : value;
-        text.classList.remove("is-pop");
-        void text.offsetWidth;
-        text.classList.add("is-pop");
-        sound.playCount(value);
-      }, delay));
-    });
-    drawTimeouts.push(window.setTimeout(() => overlay.classList.remove("is-active"), 1580));
-  }
-
-  function celebrate() {
-    const layer = document.getElementById("celebrationLayer");
-    const colors = ["#e77732", "#1f6b51", "#f1bd50", "#72a896", "#d86179"];
-    layer.innerHTML = Array.from({ length: 42 }, (_, index) => {
-      const left = 5 + Math.random() * 90;
-      const drift = -70 + Math.random() * 140;
-      const delay = Math.random() * 0.28;
-      const duration = 1.1 + Math.random() * 0.75;
-      const color = colors[index % colors.length];
-      return `<i style="--left:${left}%;--drift:${drift}px;--delay:${delay}s;--duration:${duration}s;--color:${color}"></i>`;
-    }).join("");
-    layer.classList.remove("is-active");
-    void layer.offsetWidth;
-    layer.classList.add("is-active");
-    drawTimeouts.push(window.setTimeout(() => {
-      layer.classList.remove("is-active");
-      layer.innerHTML = "";
-    }, 2200));
+  function resetDrawEffects() {
+    document.getElementById("drawCountdown").classList.remove("is-active");
+    document.getElementById("drawSpotlight").classList.remove("is-active");
+    document.getElementById("celebrationLayer").classList.remove("is-active");
+    document.getElementById("celebrationLayer").innerHTML = "";
+    document.getElementById("skipDrawButton").hidden = true;
+    document.getElementById("drawButton").disabled = false;
+    document.getElementById("drawButton").classList.remove("is-drawing");
   }
 
   function startDraw() {
+    if (document.body.classList.contains("drawing-mode")) return;
     closeStudentProfile();
     let assignment;
     try {
@@ -414,54 +388,61 @@
     const button = document.getElementById("drawButton");
     const message = document.getElementById("drawMessage");
     const students = engine.buildStudents(state.config).map((student) => student.number);
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const drawDuration = reducedMotion ? 120 : 2050;
-    drawTimeouts.forEach(window.clearTimeout);
-    drawTimeouts = [];
-    sound.unlock();
-    sound.playLaunch();
-    showCountdown(reducedMotion);
+    const directory = engine.parseStudentNames(state.config.studentData, engine.buildStudents(state.config));
+    if (seatTimeline) seatTimeline.cancel();
+    resetDrawEffects();
     document.body.classList.add("drawing-mode");
     setPresentationRotationDisabled(true);
     button.disabled = true;
     button.classList.add("is-drawing");
     message.textContent = i18n.t("draw.drawing");
 
-    state.hasDrawn = false;
     render({ keepInputs: true });
+    ui.renderSeatGrid({ ...state, hasDrawn: false }, true, adminMode, null);
+    document.getElementById("skipDrawButton").hidden = false;
+    // Keep the previous assignment until the new result is actually revealed.
     const seatElements = Array.from(document.querySelectorAll(".seat:not(.is-aisle)"));
-    seatElements.forEach((element) => element.classList.add("is-rolling"));
-
-    window.clearInterval(drawingTimer);
-    let tick = 0;
-    drawingTimer = window.setInterval(() => {
-      seatElements.forEach((element) => {
-        const value = engine.secureShuffle(students)[0];
-        ui.renderRollingValue(element, state, value || null);
-      });
-      if (tick % 3 === 0) sound.playTick(tick / 3);
-      tick += 1;
-    }, 75);
-
-    drawTimeouts.push(window.setTimeout(() => {
-      window.clearInterval(drawingTimer);
-      state.assignment = assignment;
-      state.hasDrawn = true;
-      render({ keepInputs: true });
-      document.querySelectorAll(".seat:not(.is-aisle)").forEach((element, index) => {
-        element.style.setProperty("--reveal-delay", `${index * 18}ms`);
-        element.classList.add("is-final");
-      });
-      document.body.classList.remove("drawing-mode");
-      sound.playReveal();
-      if (!reducedMotion) celebrate();
-      button.disabled = false;
-      button.classList.remove("is-drawing");
-      setPresentationRotationDisabled(false);
-      document.getElementById("drawButtonText").textContent = i18n.t("draw.redraw");
-      message.textContent = i18n.t("draw.done");
-      saveSoon();
-    }, drawDuration));
+    seatTimeline = SeatMaster.effects.run({
+      onStage(phase, number) {
+        const overlay = document.getElementById("drawCountdown");
+        overlay.classList.toggle("is-active", phase === "countdown");
+        document.getElementById("drawSpotlight").classList.toggle("is-active", phase === "rolling");
+        if (phase === "countdown") {
+          const text = document.getElementById("drawCountdownText");
+          text.textContent = number;
+          text.classList.remove("is-pop"); void text.offsetWidth; text.classList.add("is-pop");
+        }
+        if (phase === "rolling") {
+          message.textContent = i18n.t("draw.rolling");
+          seatElements.forEach((element) => element.classList.add("is-rolling"));
+        }
+      },
+      onTick() {
+        const samples = engine.secureShuffle(students);
+        seatElements.forEach((element, index) => ui.renderRollingValue(element, state, samples[index % samples.length] || null, directory));
+      },
+      onReveal() {
+        state.assignment = assignment;
+        state.hasDrawn = true;
+        render({ keepInputs: true });
+        document.querySelectorAll(".seat:not(.is-aisle)").forEach((element, index) => {
+          element.style.setProperty("--reveal-delay", `${Math.min(index * 18, 640)}ms`);
+          element.classList.add("is-final");
+        });
+        document.getElementById("skipDrawButton").hidden = true;
+        message.textContent = i18n.t("draw.revealing");
+        SeatMaster.effects.celebrate(document.getElementById("celebrationLayer"));
+        saveSoon();
+      },
+      onFinish() {
+        document.body.classList.remove("drawing-mode");
+        button.disabled = false;
+        button.classList.remove("is-drawing");
+        setPresentationRotationDisabled(false);
+        document.getElementById("drawButtonText").textContent = i18n.t("draw.redraw");
+        message.textContent = i18n.t("draw.done");
+      }
+    });
   }
 
   function toggleFullscreen() {
@@ -551,6 +532,7 @@
     document.getElementById("presentationButton").addEventListener("click", enterPresentation);
     document.getElementById("adminButton").addEventListener("click", exitPresentation);
     document.getElementById("drawButton").addEventListener("click", startDraw);
+    document.getElementById("skipDrawButton").addEventListener("click", () => { if (seatTimeline) seatTimeline.reveal(); });
     document.getElementById("rotateCounterclockwiseButton").addEventListener("click", () => rotateLayout("counterclockwise"));
     document.getElementById("rotateClockwiseButton").addEventListener("click", () => rotateLayout("clockwise"));
     document.getElementById("presentationRotateCounterclockwiseButton").addEventListener("click", () => rotateLayout("counterclockwise"));
@@ -622,6 +604,7 @@
     i18n.apply();
     ui.populateRoomPositionOptions();
     bindEvents();
+    SeatMaster.studentDraw.init(() => state, updateSoundButton);
     render();
     storage.save(state);
   }

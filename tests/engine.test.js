@@ -243,4 +243,21 @@ assert.equal(engine.normalizeConfig(maximumRotation.config).rows, 10);
 assert.equal(engine.normalizeConfig(maximumRotation.config).cols, 12);
 assert.throws(() => engine.rotateSeatLayout(rotationConfig, rotationSeats, {}, "upside-down"), /Unsupported rotation direction/);
 
+// Student draws are independent of seat capacity, pins, and gender restrictions.
+const pickedNumbers = [];
+while (pickedNumbers.length < students.length) {
+  const count = Math.min(3, students.length - pickedNumbers.length);
+  const batch = Array.from(engine.pickStudents(state.config, count, pickedNumbers));
+  assert.equal(batch.length, count);
+  assert.equal(new Set(batch).size, count);
+  assert.ok(batch.every((number) => !pickedNumbers.includes(number)));
+  pickedNumbers.push(...batch);
+}
+assert.deepEqual(pickedNumbers.sort((a, b) => a - b), Array.from(students, (student) => student.number).sort((a, b) => a - b));
+assert.throws(() => engine.pickStudents(state.config, 1, pickedNumbers), /Invalid student draw count/);
+[0, -1, 1.5, NaN, 1000].forEach((count) => assert.throws(() => engine.pickStudents(state.config, count, []), /Invalid student draw count/));
+assert.throws(() => engine.pickStudents({ maxNumber: 2, emptyNumbers: "1-2" }, 1, []), /Invalid student draw count/);
+const lastStudent = students[students.length - 1].number;
+assert.equal(engine.pickStudents(state.config, 1, students.slice(0, -1).map((student) => student.number))[0], lastStudent);
+
 console.log("engine tests passed");

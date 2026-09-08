@@ -22,9 +22,11 @@
         <span class="save-status" id="saveStatus" aria-live="polite" data-i18n="common.saved">已儲存於本機</span>
         <button class="button button-secondary language-button" type="button"><span data-language-label>EN</span></button>
         <button class="button button-secondary" id="fullscreenButton" type="button" data-i18n="common.fullscreen">全螢幕</button>
+        <button class="button button-secondary student-draw-open" type="button" data-i18n="picker.title">抽學生</button>
         <button class="button button-primary" id="presentationButton" type="button" data-i18n="common.presentation">進入展示模式</button>
       </div>
       <div class="header-actions presentation-only">
+        <button class="button button-secondary student-draw-open" type="button" data-i18n="picker.title">抽學生</button>
         <button class="button button-secondary language-button" type="button"><span data-language-label>EN</span></button>
         <button class="button button-secondary sound-button" id="soundButton" type="button" aria-pressed="true">
           <span aria-hidden="true">♪</span>
@@ -283,14 +285,47 @@
             <span class="draw-icon" aria-hidden="true">↻</span>
             <span id="drawButtonText" data-i18n="draw.start">開始抽籤</span>
           </button>
+          <button class="button button-secondary" id="skipDrawButton" type="button" data-i18n="draw.skip" hidden>直接揭曉</button>
         </div>
 
+        <div id="drawSpotlight" class="draw-spotlight" aria-hidden="true"></div>
         <div id="drawCountdown" class="draw-countdown presentation-only" aria-live="polite" aria-atomic="true">
+          <p class="countdown-caption" data-i18n="draw.getReady">全班注意，座位即將揭曉</p>
           <span id="drawCountdownText">3</span>
         </div>
         <div id="celebrationLayer" class="celebration-layer presentation-only" aria-hidden="true"></div>
       </section>
     </main>
+
+    <dialog id="studentDrawDialog" class="student-draw-dialog" aria-labelledby="studentDrawTitle">
+      <div class="student-draw-shell">
+        <header class="student-draw-header">
+          <div><p class="step-label" id="studentDrawClass"></p><h2 id="studentDrawTitle" data-i18n="picker.title">抽學生</h2></div>
+          <div class="student-draw-actions">
+            <button id="studentDrawSound" class="button button-secondary" type="button" aria-pressed="true"></button>
+            <button id="studentDrawClose" class="button button-secondary" type="button" data-i18n="picker.close">關閉</button>
+          </div>
+        </header>
+        <div class="student-draw-settings">
+          <label><span data-i18n="picker.count">一次抽幾位</span><input id="studentDrawCount" type="number" min="1" max="999" step="1" value="1" required /></label>
+          <label class="picker-repeat"><input id="studentDrawNoRepeat" type="checkbox" checked /><span data-i18n="picker.noRepeat">本輪不重複</span></label>
+          <span id="studentDrawPool"></span>
+        </div>
+        <section id="studentDrawStage" class="student-draw-stage" aria-busy="false">
+          <div class="picker-orbit" aria-hidden="true"></div>
+          <p id="studentDrawPhase" class="picker-phase" data-i18n="picker.ready">下一位，會是誰？</p>
+          <div id="studentDrawCards" class="student-draw-cards"></div>
+          <div id="studentDrawConfetti" class="celebration-layer" aria-hidden="true"></div>
+        </section>
+        <p id="studentDrawAnnouncement" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
+        <div class="student-draw-controls">
+          <button id="studentDrawStart" class="draw-button" type="button" data-i18n="picker.start">開始抽學生</button>
+          <button id="studentDrawSkip" class="button button-secondary" type="button" data-i18n="draw.skip" hidden>直接揭曉</button>
+          <button id="studentDrawReset" class="button button-secondary" type="button" data-i18n="picker.reset">重開一輪</button>
+        </div>
+        <details class="student-draw-history"><summary data-i18n="picker.history">本輪抽選紀錄</summary><ol id="studentDrawHistory"></ol></details>
+      </div>
+    </dialog>
 
     <dialog id="pinDialog" class="pin-dialog">
       <form method="dialog" id="pinForm">
@@ -354,6 +389,8 @@
     <script src="js/seat-engine.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/sound.js"></script>
+    <script src="js/draw-effects.js"></script>
+    <script src="js/student-draw.js"></script>
     <script src="js/app.js"></script>
   </body>
 </html>

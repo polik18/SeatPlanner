@@ -257,9 +257,8 @@
     document.getElementById("saveStatus").textContent = message;
   }
 
-  function renderRollingValue(element, state, number) {
-    const students = SeatMaster.engine.buildStudents(state.config);
-    const directory = SeatMaster.engine.parseStudentNames(state.config.studentData, students);
+  function renderRollingValue(element, state, number, directory) {
+    if (!directory) directory = SeatMaster.engine.parseStudentNames(state.config.studentData, SeatMaster.engine.buildStudents(state.config));
     const main = element.querySelector(".seat-main");
     if (main) main.innerHTML = presentationStudentContent(state, number, directory);
   }

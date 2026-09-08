@@ -496,7 +496,15 @@
     return assignment;
   }
 
+  function pickStudents(config, count, excludedNumbers) {
+    const excluded = new Set(excludedNumbers || []);
+    const pool = buildStudents(config).filter((student) => !excluded.has(student.number));
+    if (!Number.isInteger(count) || count < 1 || count > pool.length) throw new RangeError("Invalid student draw count");
+    return secureShuffle(pool).slice(0, count).map((student) => student.number);
+  }
+
   SeatMaster.engine = {
+    pickStudents,
     clampInteger,
     parseEmptyNumbers,
     inferStudentNumbers,
