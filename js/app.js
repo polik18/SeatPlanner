@@ -591,6 +591,10 @@
   }
 
   function init() {
+    const header = document.querySelector(".app-header");
+    const updateHeaderHeight = () => document.documentElement.style.setProperty("--app-header-height", `${header.getBoundingClientRect().height}px`);
+    updateHeaderHeight();
+    new ResizeObserver(updateHeaderHeight).observe(header);
     state = hydrate(storage.load() || SeatMaster.createDefaultState());
     i18n.apply();
     ui.populateRoomPositionOptions();

@@ -155,7 +155,8 @@
     badge.classList.toggle("is-error", !report.valid);
     const panel = document.getElementById("validationPanel");
     panel.hidden = report.valid;
-    panel.innerHTML = report.errors.map((error) => `• ${escapeHtml(error)}`).join("<br>");
+    const message = report.valid ? "" : `<strong>${escapeHtml(i18n.t("stage.errors", { count: report.errors.length }))}</strong><ul>${report.errors.map((error) => `<li>${escapeHtml(error)}</li>`).join("")}</ul>`;
+    if (panel.innerHTML !== message) panel.innerHTML = message;
   }
 
   function fillInputs(state) {
