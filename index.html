@@ -48,14 +48,12 @@
 
     <main class="app-shell">
       <aside id="manualPanel" class="manual-panel panel-section admin-only" aria-labelledby="manualTitle" hidden>
-        <p class="step-label" data-i18n="manual.eyebrow">逐一安排</p>
         <h2 id="manualTitle" data-i18n="mode.manual">全手動排位</h2>
         <p id="manualProgress" aria-live="polite"></p>
         <progress id="manualProgressBar" aria-label="排位進度" data-i18n-aria-label="manual.progressLabel" max="1" value="0"></progress>
-        <p class="manual-instructions" data-i18n="manual.instructions">選學生 → 點座位。也可拖曳；點已排學生可移動或交換。</p>
-        <details class="manual-rules"><summary data-i18n="manual.rulesTitle">手動排位說明</summary><p class="manual-rules-note" data-i18n="manual.rulesNote">沿用目前結果或預排位置起步。手動排位由老師決定，不套用抽籤的性別與固定限制；走道不能坐人。</p></details>
+        <details class="manual-rules"><summary data-i18n="manual.rulesTitle">手動排位說明</summary><p class="manual-instructions" data-i18n="manual.instructions">選學生 → 點座位。也可拖曳；點已排學生可移動或交換。</p><p class="manual-rules-note" data-i18n="manual.rulesNote">沿用目前結果或預排位置起步。手動排位由老師決定，不套用抽籤的性別與固定限制；走道不能坐人。</p></details>
         <p id="manualCapacity" class="manual-capacity" role="alert" hidden></p>
-        <label class="field"><span data-i18n="manual.search">搜尋座號或姓名</span><input id="manualSearch" type="search" autocomplete="off" placeholder="例如：21 或 小明" data-i18n-placeholder="manual.searchPlaceholder" /></label>
+        <label class="field"><span class="visually-hidden" data-i18n="manual.search">搜尋座號或姓名</span><input id="manualSearch" type="search" autocomplete="off" placeholder="搜尋座號／姓名" data-i18n-placeholder="manual.search" /></label>
         <div class="manual-filters" role="group" aria-label="名單篩選" data-i18n-aria-label="manual.filterLabel">
           <button type="button" data-manual-filter="pending" aria-pressed="true" data-i18n="manual.pending">待排學生</button>
           <button type="button" data-manual-filter="all" aria-pressed="false" data-i18n="manual.all">全班名單</button>

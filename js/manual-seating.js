@@ -127,6 +127,7 @@
       const state = getState();
       const source = state.manualDraft || {};
       const students = engine.buildStudents(state.config);
+      const names = engine.parseStudentNames(state.config.studentData, students);
       const pending = remaining(state, source);
       const seatsByNumber = new Map(Object.entries(source).filter(([, n]) => n).map(([id, n]) => [n, id]));
       if (selected !== null && !students.some((s) => s.number === selected)) selected = null;
@@ -145,10 +146,13 @@
       document.querySelectorAll("[data-manual-filter]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.manualFilter === filter)));
       const visible = students.filter((s) => matches(s.number) && (filter === "all" || !seatsByNumber.has(s.number)));
       const tray = $("manualStudents");
+      tray.classList.toggle("numbers-only", !visible.some((s) => names.get(s.number)));
       const scroll = tray.scrollTop;
       tray.innerHTML = visible.length ? visible.map((s) => {
         const id = seatsByNumber.get(s.number);
-        return `<button type="button" class="manual-student ${selected === s.number ? "is-selected" : ""}" data-student-number="${s.number}" draggable="true" aria-pressed="${selected === s.number}"><strong>${ui.escapeHtml(label(s.number))}</strong><small>${ui.escapeHtml(id ? seatLabel(id) : t("manual.pending"))}</small></button>`;
+        const name = names.get(s.number);
+        const description = `${label(s.number)}${id ? ` · ${seatLabel(id)}` : ""}`;
+        return `<button type="button" class="manual-student ${selected === s.number ? "is-selected" : ""}" data-student-number="${s.number}" draggable="true" aria-pressed="${selected === s.number}" aria-label="${ui.escapeHtml(description)}" title="${ui.escapeHtml(description)}"><span class="manual-student-number">${s.number}</span>${name ? `<span class="manual-student-name">${ui.escapeHtml(name)}</span>` : ""}${id ? `<small>${ui.escapeHtml(seatLabel(id))}</small>` : ""}</button>`;
       }).join("") : `<p class="manual-empty">${ui.escapeHtml(query ? t("manual.noMatches") : t("manual.nonePending"))}</p>`;
       tray.scrollTop = scroll;
       document.querySelectorAll(".seat").forEach((element) => {

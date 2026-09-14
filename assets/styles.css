@@ -812,7 +812,8 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
 /* The roster replaces settings while arranging; the classroom stays in place. */
 [hidden] { display: none !important; }
 .manual-mode .control-panel { display: none; }
-.manual-panel { display: flex; flex-direction: column; min-height: 0; gap: 10px; }
+.manual-panel { display: flex; flex-direction: column; min-height: 0; gap: 8px; padding: 16px; }
+.manual-panel h2 { font-size: 19px; }
 .manual-panel h2, .manual-panel p { margin: 0; }
 .manual-panel progress { width: 100%; height: 7px; flex-shrink: 0; accent-color: var(--green); }
 .manual-rules { font-size: 12px; color: #63736a; }
@@ -822,21 +823,24 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
 .manual-rules-note { color: #63736a; }
 .manual-panel .field { margin: 0; }
 .manual-filters { display: flex; gap: 6px; }
-.manual-filters button { flex: 1; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; background: white; color: var(--green); cursor: pointer; }
+.manual-filters button { flex: 1; min-height: 32px; border: 1px solid var(--line); border-radius: 8px; background: white; color: var(--green); cursor: pointer; }
 .manual-filters button[aria-pressed="true"] { background: var(--green); color: white; }
-.manual-students { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 7px; overflow: auto; min-height: 90px; flex: 1; padding: 3px; }
-.manual-student { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 54px; padding: 9px; border: 1px solid var(--line); border-radius: 9px; background: white; text-align: left; cursor: grab; overflow-wrap: anywhere; }
-.manual-student strong { font-size: 12px; }
-.manual-student small { font-size: 10px; color: #617168; }
+.manual-students { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-content: start; gap: 5px; overflow: auto; min-height: 120px; flex: 1; padding: 3px; }
+.manual-students.numbers-only { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.manual-student { display: flex; align-items: center; gap: 5px; min-width: 0; min-height: 38px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: white; text-align: left; cursor: grab; }
+.manual-student-number { flex-shrink: 0; min-width: 2ch; color: var(--green); font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.manual-student-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
+.manual-student small { margin-left: auto; flex-shrink: 0; font-size: 9px; color: #617168; }
+.numbers-only .manual-student { justify-content: center; }
 .manual-student.is-selected { background: #e9f4ee; border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); }
-.manual-selection { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.manual-selection { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
 .manual-selection > strong, .manual-auto, .manual-feedback { grid-column: 1 / -1; }
 #manualCurrent { font-size: 13px; color: var(--green); line-height: 1.5; }
 .manual-auto { display: flex; align-items: center; gap: 5px; font-size: 12px; }
 .manual-auto input { width: 18px; height: 18px; accent-color: var(--green); }
 .manual-tools { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .manual-tools .button { font-size: 12px; padding: 7px; min-height: 40px; }
-.manual-feedback { color: #63736a; min-height: 36px; }
+.manual-feedback { color: #63736a; min-height: 18px; }
 .manual-selection > .button { padding: 9px 6px; font-size: 12px; }
 .manual-panel button:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
 .manual-empty { grid-column: 1 / -1; font-size: 12px; line-height: 1.6; }
@@ -851,17 +855,17 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
 .mode-tab { min-height: 40px; }
 @media (min-width: 981px) {
   .manual-panel { max-height: 100%; overflow: auto; }
-  .manual-mode .app-shell { grid-template-columns: minmax(280px, 320px) minmax(0, 1fr); }
+  .manual-mode .app-shell { grid-template-columns: minmax(330px, 370px) minmax(0, 1fr); }
 }
 @media (max-width: 980px) {
   .manual-mode .app-shell { display: block; }
   .manual-panel { position: sticky; top: 0; z-index: 10; gap: 6px; padding: 10px; margin-bottom: 12px; box-shadow: 0 5px 18px #173e3020; }
   .manual-panel > .step-label, .manual-panel > h2, .manual-rules, .manual-panel > progress { display: none; }
-  .manual-panel > .field { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
+  .manual-panel > .field { display: block; }
   .manual-panel > .field input { min-height: 36px; padding: 6px 9px; }
   .manual-filters button { min-height: 32px; }
-  .manual-students { display: flex; flex: none; min-height: 64px; max-height: 76px; overflow-x: auto; }
-  .manual-student { flex: 0 0 118px; }
+  .manual-students { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); flex: none; min-height: 38px; max-height: 178px; overflow-x: hidden; }
+  .manual-students.numbers-only { grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); }
   .manual-selection { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; padding-top: 6px; }
   .manual-selection > strong, .manual-auto { grid-column: auto; }
   .manual-tools { grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -884,6 +888,9 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
 @media (max-height: 650px) and (max-width: 980px) {
   .manual-mode .app-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); align-items: start; gap: 10px; }
   .manual-panel { position: sticky; max-height: 100dvh; overflow: auto; }
+  .manual-students { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: 178px; flex-shrink: 0; }
+  .manual-students.numbers-only { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .manual-student-name { font-size: 12px; }
   .manual-panel > .field { display: block; }
   .manual-selection > strong, .manual-auto { grid-column: 1 / -1; }
   .manual-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
