@@ -11,6 +11,7 @@
   let selectedAdjustmentSeatId = null;
   let profileFlipTimer = null;
   let manual;
+  let studentPicker;
 
   function hydrate(rawState) {
     const config = engine.normalizeConfig(rawState && rawState.config ? rawState.config : state.config);
@@ -32,6 +33,8 @@
     const hydrated = { version: SeatMaster.constants.VERSION, config, seats, assignment: resultValid ? assignment : {}, hasDrawn: resultValid,
       resultSource: rawState && rawState.resultSource === "manual" ? "manual" : "draw", manualDraft: null };
     if (rawState && rawState.manualDraft && typeof rawState.manualDraft === "object") hydrated.manualDraft = SeatMaster.manualSeating.normalize(hydrated, rawState.manualDraft);
+    hydrated.adminMode = ["layout", "prearrange", "manual", "adjust"].includes(rawState && rawState.adminMode) ? rawState.adminMode : hydrated.manualDraft ? "manual" : "layout";
+    if (hydrated.adminMode === "adjust" && !resultValid) hydrated.adminMode = "layout";
     return hydrated;
   }
 
@@ -62,6 +65,11 @@
 
   function updateAdminModeUI() {
     if (adminMode === "adjust" && !state.hasDrawn) adminMode = "layout";
+    state.adminMode = adminMode;
+    const atHome = adminMode === "layout" && !document.body.classList.contains("presentation-mode");
+    document.getElementById("homeButtonText").textContent = i18n.t(atHome ? "home.current" : "home.back");
+    document.getElementById("homeButton").setAttribute("aria-current", atHome ? "page" : "false");
+    document.getElementById("otherToolsLink").hidden = !atHome;
     document.querySelectorAll("[data-admin-mode]").forEach((button) => {
       const active = button.dataset.adminMode === adminMode;
       button.classList.toggle("is-active", active);
@@ -318,6 +326,22 @@
     render({ keepInputs: true });
   }
 
+  function goHome() {
+    // Closing activities uses the same cancellation path as their own exit.
+    // A draft is kept separately and must never be completed or cleared here.
+    if (studentPicker) studentPicker.close();
+    const dialog = document.getElementById("pinDialog");
+    if (dialog.open) dialog.close();
+    activePinSeatId = null;
+    exitPresentation();
+    setAdminMode("layout");
+    ui.setValidationAnchor(null);
+    document.querySelector(".control-panel").scrollTop = 0;
+    document.querySelector(".classroom-stage").scrollTop = 0;
+    window.scrollTo(0, 0);
+    document.querySelector('[data-admin-mode="layout"]').focus({ preventScroll: true });
+  }
+
   function isSensitiveField(label) {
     return /(?:密碼|密码|口令|password|passwd|passcode|pwd|pin)/i.test(String(label || ""));
   }
@@ -368,8 +392,9 @@
     if (mode === "adjust" && !state.hasDrawn) return;
     adminMode = mode;
     selectedAdjustmentSeatId = null;
-    if (mode === "manual") { manual.start(); saveSoon(); }
+    if (mode === "manual") manual.start();
     render({ keepInputs: true });
+    saveSoon();
   }
 
   function selectAdjustmentSeat(seatId) {
@@ -580,6 +605,7 @@
       if (event.submitter && event.submitter.value === "default") applyPin();
     });
     document.getElementById("manualStartButton").addEventListener("click", () => { setAdminMode("manual"); document.getElementById("manualPanel").scrollIntoView({ block: "start" }); });
+    document.querySelectorAll("[data-go-home]").forEach((button) => button.addEventListener("click", goHome));
     document.getElementById("presentationButton").addEventListener("click", enterPresentation);
     document.getElementById("adminButton").addEventListener("click", exitPresentation);
     document.getElementById("drawButton").addEventListener("click", startDraw);
@@ -621,9 +647,9 @@
       try {
         state = hydrate(await storage.readImport(file));
         manual.reset();
-        adminMode = state.manualDraft ? "manual" : "layout";
-        storage.save(state);
+        adminMode = state.manualDraft ? "manual" : state.adminMode;
         render();
+        storage.save(state);
         ui.showToast(i18n.t("toast.imported"));
       } catch (error) {
         ui.showToast(error.message || i18n.t("toast.importFailed"), "error");
@@ -656,11 +682,11 @@
   function init() {
     state = hydrate(storage.load() || SeatMaster.createDefaultState());
     manual = SeatMaster.manualSeating.createController(() => state, (persist = true) => { render({ keepInputs: true }); if (persist) saveSoon(); }, finishManual);
-    if (state.manualDraft) adminMode = "manual";
+    adminMode = state.adminMode;
     i18n.apply();
     ui.populateRoomPositionOptions();
     bindEvents();
-    SeatMaster.studentDraw.init(() => state, updateSoundButton);
+    studentPicker = SeatMaster.studentDraw.init(() => state, updateSoundButton);
     render();
     storage.save(state);
   }

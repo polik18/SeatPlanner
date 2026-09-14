@@ -189,6 +189,56 @@ try:
         page.locator('.admin-only .student-draw-open').click()
         expect(page.locator('#studentDrawDialog')).to_be_visible()
         page.locator('#studentDrawClose').click()
+        # Home is consistent across editing, presentation and modal activities.
+        final_result = stored(page)['assignment']
+        page.locator('#manualStartButton').click()
+        page.once('dialog', lambda d: d.accept())
+        page.locator('#manualClearButton').click()
+        seat(page, '0-0').click()
+        draft = stored(page)['manualDraft']
+        page.locator('#homeButton').click()
+        expect(page.locator('[data-admin-mode="layout"]')).to_have_attribute('aria-selected', 'true')
+        expect(page.locator('#manualPanel')).to_be_hidden()
+        assert stored(page)['manualDraft'] == draft
+        assert stored(page)['assignment'] == final_result
+        page.reload()
+        expect(page.locator('#homeButtonText')).to_have_text('首頁')
+        expect(page.locator('#manualPanel')).to_be_hidden()
+        page.locator('#manualStartButton').click()
+        assert stored(page)['manualDraft'] == draft
+        page.locator('#homeButton').click()
+        page.locator('[data-admin-mode="prearrange"]').click()
+        seat(page, '0-0').click()
+        page.locator('#pinStudentSelect').select_option('2')
+        page.locator('#pinDialog [data-go-home]').click()
+        expect(page.locator('#pinDialog')).not_to_be_visible()
+        assert stored(page)['seats'][0]['pin'] is None
+        expect(page.locator('#homeButtonText')).to_have_text('首頁')
+        page.locator('[data-admin-mode="adjust"]').click()
+        page.locator('#homeButton').click()
+        expect(page.locator('#homeButtonText')).to_have_text('首頁')
+        page.locator('#presentationButton').click()
+        page.emulate_media(reduced_motion='no-preference')
+        page.locator('#drawButton').click()
+        page.locator('#homeButton').click()
+        expect(page.locator('body')).not_to_have_class('presentation-mode')
+        assert stored(page)['assignment'] == final_result
+        assert stored(page)['manualDraft'] == draft
+        page.locator('.admin-only .student-draw-open').click()
+        page.locator('#studentDrawStart').click()
+        page.locator('#studentDrawDialog [data-go-home]').click()
+        expect(page.locator('#studentDrawDialog')).not_to_be_visible()
+        page.locator('.admin-only .student-draw-open').click()
+        expect(page.locator('#studentDrawHistory')).to_have_text('還沒有人被抽中')
+        assert page.evaluate('JSON.parse(localStorage.getItem("classroom-seat-master:student-draw") || "null")?.history.length || 0') == 0
+        page.locator('#studentDrawDialog [data-go-home]').click()
+        page.emulate_media(reduced_motion='reduce')
+        page.locator('#presentationButton').click()
+        page.locator('.seat.has-profile').first.click()
+        expect(page.locator('#studentProfileOverlay')).to_be_visible()
+        page.locator('#studentProfileOverlay [data-go-home]').click()
+        expect(page.locator('#studentProfileOverlay')).to_be_hidden()
+        expect(page.locator('#homeButtonText')).to_have_text('首頁')
         # Layout checks with real click/touch at five sizes; no page overflow.
         for width, height in [(1440, 900), (1024, 768), (768, 1024), (390, 844), (640, 390)]:
             ctx = browser.new_context(viewport={'width': width, 'height': height}, has_touch=width < 981)
@@ -203,8 +253,14 @@ try:
             # Teacher can reach the last desk without it being covered by the tray.
             seat(view, '7-3').tap() if width < 981 else seat(view, '7-3').click()
             assert stored(view)['manualDraft']['7-3'] == 2
+            # The fixed home control stays reachable after scrolling to a desk.
+            button = view.locator('#homeButton')
+            assert button.evaluate('e => {const r=e.getBoundingClientRect();return e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}')
+            button.tap() if width < 981 else button.click()
+            expect(view.locator('#manualPanel')).to_be_hidden()
+            view.locator('#manualStartButton').click()
             view.locator('.admin-only .language-button').click()
-            expect(view.locator('#manualCurrent')).to_contain_text('Place:')
+            expect(view.locator('#homeButtonText')).to_have_text('Back to home')
             expect(view.locator('#manualFinishButton')).to_have_text('Finish & present')
             ctx.close()
         assert not errors, errors

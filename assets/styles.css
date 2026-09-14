@@ -40,6 +40,16 @@ body {
 button, input, select { font: inherit; }
 button { color: inherit; }
 
+.home-navigation { position: fixed; left: 14px; bottom: max(14px, env(safe-area-inset-bottom)); z-index: 2147483647; display: flex; gap: 8px; align-items: center; }
+.home-button, .home-navigation a { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 15px; border: 1px solid #174f3c; border-radius: 99px; font-size: 13px; font-weight: 800; text-decoration: none; box-shadow: 0 5px 18px #173e3026; cursor: pointer; }
+.home-button { color: white; background: var(--green); }
+.home-button > span:first-child { font-size: 20px; line-height: 1; }
+.home-button[aria-current="page"], .home-navigation a { color: var(--green); background: #fffdf8; }
+.home-navigation a { font-size: 11px; border-color: var(--line); }
+.home-button:focus-visible, .home-navigation a:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
+.student-draw-actions { flex-wrap: wrap; justify-content: flex-end; }
+.profile-home { position: absolute; top: 20px; left: 20px; }
+
 .app-header {
   position: sticky;
   z-index: 20;

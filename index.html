@@ -9,7 +9,10 @@
     <link rel="stylesheet" href="assets/styles.css" />
   </head>
   <body>
-    <a data-polik-category-return href="https://polik18.github.io/education.html" aria-label="回到教學現場分類" style="position:fixed;left:14px;bottom:14px;z-index:2147483647;display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border:1px solid rgba(23,79,60,.3);border-radius:999px;background:rgba(255,253,248,.94);color:#0d3528;font:700 13px/1 system-ui,-apple-system,sans-serif;text-decoration:none;box-shadow:0 8px 24px rgba(0,0,0,.2);backdrop-filter:blur(10px)">← 回教學現場分類</a>
+    <nav class="home-navigation" aria-label="首頁導覽" data-i18n-aria-label="home.navigation">
+      <button id="homeButton" class="home-button" type="button" data-go-home><span aria-hidden="true">⌂</span><span id="homeButtonText" data-i18n="home.back">回首頁</span></button>
+      <a id="otherToolsLink" data-polik-category-return href="https://polik18.github.io/education.html" data-i18n="home.otherTools">其他教學工具 ↗</a>
+    </nav>
     <header class="app-header">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true">CM</span>
@@ -270,7 +273,7 @@
 
         <div class="admin-mode-bar admin-only" aria-label="管理模式">
           <div class="mode-tabs" role="tablist">
-            <button class="mode-tab is-active" type="button" data-admin-mode="layout" role="tab" aria-selected="true" data-i18n="mode.layout">座位屬性</button>
+            <button class="mode-tab is-active" type="button" data-admin-mode="layout" role="tab" aria-selected="true" data-i18n="mode.layout">首頁／座位設定</button>
             <button class="mode-tab" type="button" data-admin-mode="prearrange" role="tab" aria-selected="false" data-i18n="mode.prearrange">事先安排</button>
             <button class="mode-tab" type="button" data-admin-mode="manual" role="tab" aria-selected="false" data-i18n="mode.manual">全手動排位</button>
             <button class="mode-tab" id="adjustModeButton" type="button" data-admin-mode="adjust" role="tab" aria-selected="false" data-i18n="mode.adjust" disabled>調整結果</button>
@@ -330,6 +333,7 @@
         <header class="student-draw-header">
           <div><p class="step-label" id="studentDrawClass"></p><h2 id="studentDrawTitle" data-i18n="picker.title">抽學生</h2></div>
           <div class="student-draw-actions">
+            <button class="button button-secondary" type="button" data-go-home data-i18n="home.back">回首頁</button>
             <button id="studentDrawSound" class="button button-secondary" type="button" aria-pressed="true"></button>
             <button id="studentDrawClose" class="button button-secondary" type="button" data-i18n="picker.close">關閉</button>
           </div>
@@ -371,6 +375,7 @@
         </label>
         <div id="pinValidationPanel" class="validation-panel" role="status" aria-live="polite" aria-atomic="true" hidden></div>
         <div class="dialog-actions">
+          <button class="button button-secondary" type="button" data-go-home data-i18n="home.back">回首頁</button>
           <button class="button button-secondary" value="cancel" type="submit" data-i18n="common.cancel">取消</button>
           <button class="button button-primary" id="confirmPinButton" value="default" type="submit" data-i18n="common.apply">套用</button>
         </div>
@@ -378,6 +383,7 @@
     </dialog>
 
     <div id="studentProfileOverlay" class="student-profile-overlay" role="dialog" aria-modal="true" aria-labelledby="studentProfileName" hidden>
+      <button class="button button-secondary profile-home" type="button" data-go-home data-i18n="home.back">回首頁</button>
       <button class="profile-close" id="studentProfileClose" type="button" aria-label="關閉">×</button>
       <div class="student-profile-card" id="studentProfileCard">
         <div class="student-profile-inner">

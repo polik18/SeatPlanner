@@ -12,6 +12,7 @@
       assignment: state.hasDrawn ? { ...state.assignment } : {},
       hasDrawn: Boolean(state.hasDrawn),
       resultSource: state.resultSource || "draw",
+      adminMode: state.adminMode || "layout",
       manualDraft: state.manualDraft ? { ...state.manualDraft } : null
     };
   }
