@@ -152,10 +152,10 @@
       const detail = seat.pin ? `${name ? `${escapeHtml(name)} · ` : ""}${escapeHtml(i18n.t("seat.fixed"))}` : escapeHtml(i18n.t("mode.clickToAssign"));
       return `<div class="seat-main"><strong>${seat.pin ? escapeHtml(i18n.t("seat.number", { number: seat.pin })) : coordinate}</strong><small>${detail}</small></div>`;
     }
-    if (adminMode === "adjust") {
+    if (adminMode === "adjust" || adminMode === "manual") {
       if (seat.type === "aisle") return `<div class="seat-main admin-result"><strong>×</strong><small class="admin-seat-meta">${escapeHtml(typeLabel(seat.type))}</small></div>`;
-      const value = state.assignment[seat.id];
-      return `<div class="seat-main admin-result">${presentationStudentContent(state, value, directory)}<small class="admin-seat-meta">${coordinate}</small></div>`;
+      const value = adminMode === "manual" ? state.manualDraft[seat.id] : state.assignment[seat.id];
+      return `<div class="seat-main admin-result">${presentationStudentContent(adminMode === "manual" ? { ...state, config: { ...state.config, displayMode: "both" } } : state, value, directory)}<small class="admin-seat-meta">${coordinate}</small></div>`;
     }
     const pinned = seat.pin ? `<strong>${escapeHtml(i18n.t("seat.number", { number: seat.pin }))}</strong><small>${escapeHtml(i18n.t("seat.fixed"))} · ${escapeHtml(typeLabel(seat.type))}</small>` : `<strong>${seat.type === "aisle" ? "×" : columnLabel(seat.col) + (seat.row + 1)}</strong><small>${escapeHtml(typeLabel(seat.type))}</small>`;
     const pinTitle = i18n.t("pin.title", { seat: `${columnLabel(seat.col)}${seat.row + 1}` });
@@ -187,7 +187,7 @@
         const hasProfile = Number.isInteger(assignedNumber) && records.has(assignedNumber);
         if (presentation && hasProfile) classes.push("has-profile");
         if (!presentation && adminMode === "prearrange") classes.push("prearrange-seat", seat.pin ? "is-pinned-seat" : "");
-        if (!presentation && adminMode === "adjust") classes.push("admin-adjust-seat", selectedSeatId === seat.id ? "is-swap-selected" : "");
+        if (!presentation && (adminMode === "adjust" || adminMode === "manual")) classes.push("admin-adjust-seat", selectedSeatId === seat.id ? "is-swap-selected" : "");
         html.push(`<div class="${classes.filter(Boolean).join(" ")}" data-seat-id="${seat.id}" data-type="${presentation ? "general" : seat.type}" role="button" tabindex="${presentation && !hasProfile ? "-1" : "0"}" aria-label="${presentation ? escapeHtml(hasProfile ? i18n.t("profile.openCard") : "Seat") : escapeHtml(typeLabel(seat.type))}">${seatContent(seat, state, presentation, directory, adminMode)}${presentation && hasProfile ? '<span class="profile-indicator" aria-hidden="true">＋</span>' : ""}</div>`);
       }
     }
@@ -207,6 +207,7 @@
       <div class="summary-chip"><strong>${students.length}</strong><span>${escapeHtml(i18n.t("summary.total"))}</span></div>`;
     document.getElementById("stageTitle").textContent = i18n.t("stage.title", { className: state.config.className });
     document.getElementById("pageTitle").textContent = i18n.t("stage.pageTitle", { className: state.config.className });
+    document.querySelector(".stage-heading .presentation-only").textContent = i18n.t(state.resultSource === "manual" ? "manual.resultTitle" : "stage.draw");
     document.getElementById("stageSubtitle").textContent = i18n.t("stage.subtitle", { seats: usable, students: students.length, empty: emptyDesks });
 
     const report = SeatMaster.engine.validate(state);

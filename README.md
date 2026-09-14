@@ -20,6 +20,8 @@
 - 管理介面與展示模式可即時切換繁體中文／English，班名及姓名維持原文
 - 固定特殊座位，展示模式完全隱藏規則與標記
 - 「事先安排」暗樁模式可直接點座位指定特殊生，抽籤保證保留預排位置
+- 「全手動排位」不必先抽籤：選學生後點座位，預設自動接續下一位；支援姓名／座號搜尋、拖曳、鍵盤、交換、移回待排與復原／重做
+- 手動草稿可重載接續並隨 JSON 匯出；全班排好後直接完成展示，走道不可排位，其餘由老師自由決定
 - 抽籤後自動進入「調整結果」，依序點兩個座位即可交換學生或空桌
 - 手動調整後可直接返回展示，不會重新抽籤；最終結果會保存在本機與匯出檔
 - 使用瀏覽器加密亂數進行公平洗牌
@@ -44,6 +46,7 @@ SeatPlanner/
 ├── js/sound.js            # Web Audio 離線音效
 ├── js/draw-effects.js     # 共用倒數、音效、揭曉與取消時序
 ├── js/student-draw.js     # 抽學生、本輪名單及紀錄
+├── js/manual-seating.js  # 手動草稿、名單操作與復原／重做
 ├── js/app.js              # 狀態管理與事件協調
 └── tests/                # 無相依套件的引擎與抽籤時序測試
 ```
@@ -55,7 +58,12 @@ SeatPlanner/
 ```bash
 node tests/engine.test.js
 node tests/effects.test.js
+node tests/manual.test.js
 ```
+
+完整瀏覽器驗證（需 Python Playwright 與 Chromium）：`python tests/manual-browser.py`。
+
+手動排位操作、設計理由與資料行為見 [操作設計](docs/manual-seating.md)。
 
 ## 使用注意
 

@@ -23,6 +23,7 @@
         <button class="button button-secondary language-button" type="button"><span data-language-label>EN</span></button>
         <button class="button button-secondary" id="fullscreenButton" type="button" data-i18n="common.fullscreen">全螢幕</button>
         <button class="button button-secondary student-draw-open" type="button" data-i18n="picker.title">抽學生</button>
+        <button class="button button-secondary" id="manualStartButton" type="button" data-i18n="mode.manual">全手動排位</button>
         <button class="button button-primary" id="presentationButton" type="button" data-i18n="common.presentation">進入展示模式</button>
       </div>
       <div class="header-actions presentation-only">
@@ -46,6 +47,34 @@
     </header>
 
     <main class="app-shell">
+      <aside id="manualPanel" class="manual-panel panel-section admin-only" aria-labelledby="manualTitle" hidden>
+        <p class="step-label" data-i18n="manual.eyebrow">逐一安排</p>
+        <h2 id="manualTitle" data-i18n="mode.manual">全手動排位</h2>
+        <p id="manualProgress" aria-live="polite"></p>
+        <progress id="manualProgressBar" aria-label="排位進度" data-i18n-aria-label="manual.progressLabel" max="1" value="0"></progress>
+        <p class="manual-instructions" data-i18n="manual.instructions">選學生 → 點座位。也可拖曳；點已排學生可移動或交換。</p>
+        <details class="manual-rules"><summary data-i18n="manual.rulesTitle">手動排位說明</summary><p class="manual-rules-note" data-i18n="manual.rulesNote">沿用目前結果或預排位置起步。手動排位由老師決定，不套用抽籤的性別與固定限制；走道不能坐人。</p></details>
+        <p id="manualCapacity" class="manual-capacity" role="alert" hidden></p>
+        <label class="field"><span data-i18n="manual.search">搜尋座號或姓名</span><input id="manualSearch" type="search" autocomplete="off" placeholder="例如：21 或 小明" data-i18n-placeholder="manual.searchPlaceholder" /></label>
+        <div class="manual-filters" role="group" aria-label="名單篩選" data-i18n-aria-label="manual.filterLabel">
+          <button type="button" data-manual-filter="pending" aria-pressed="true" data-i18n="manual.pending">待排學生</button>
+          <button type="button" data-manual-filter="all" aria-pressed="false" data-i18n="manual.all">全班名單</button>
+        </div>
+        <div id="manualStudents" class="manual-students"></div>
+        <div class="manual-selection">
+          <strong id="manualCurrent" aria-live="polite"></strong>
+          <label class="manual-auto"><input id="manualAutoNext" type="checkbox" checked /><span data-i18n="manual.autoNext">排好後自動選下一位</span></label>
+          <div class="manual-tools">
+            <button id="manualUnseatButton" class="button button-secondary" type="button" data-i18n="manual.unseat">移回待排</button>
+            <button id="manualCancelSelection" class="button button-secondary" type="button" data-i18n="manual.cancelSelection">取消選取</button>
+            <button id="manualUndoButton" class="button button-secondary" type="button" data-i18n="manual.undo">復原</button>
+            <button id="manualRedoButton" class="button button-secondary" type="button" data-i18n="manual.redo">重做</button>
+          </div>
+          <p id="manualFeedback" class="manual-feedback" role="status" aria-live="polite" data-i18n="manual.saved">草稿自動儲存，可隨時回來繼續。</p>
+          <button id="manualFinishButton" class="button button-primary" type="button" data-i18n="manual.finish">完成並展示</button>
+          <button id="manualClearButton" class="button button-quiet" type="button" data-i18n="manual.clear">全部移回待排</button>
+        </div>
+      </aside>
       <aside class="control-panel admin-only" aria-label="座位設定">
         <section class="panel-section">
           <div class="section-heading">
@@ -245,6 +274,7 @@
           <div class="mode-tabs" role="tablist">
             <button class="mode-tab is-active" type="button" data-admin-mode="layout" role="tab" aria-selected="true" data-i18n="mode.layout">座位屬性</button>
             <button class="mode-tab" type="button" data-admin-mode="prearrange" role="tab" aria-selected="false" data-i18n="mode.prearrange">事先安排</button>
+            <button class="mode-tab" type="button" data-admin-mode="manual" role="tab" aria-selected="false" data-i18n="mode.manual">全手動排位</button>
             <button class="mode-tab" id="adjustModeButton" type="button" data-admin-mode="adjust" role="tab" aria-selected="false" data-i18n="mode.adjust" disabled>調整結果</button>
           </div>
           <div class="mode-guidance">
@@ -391,6 +421,7 @@
     <script src="js/sound.js"></script>
     <script src="js/draw-effects.js"></script>
     <script src="js/student-draw.js"></script>
+    <script src="js/manual-seating.js"></script>
     <script src="js/app.js"></script>
   </body>
 </html>

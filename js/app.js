@@ -10,6 +10,7 @@
   let adminMode = "layout";
   let selectedAdjustmentSeatId = null;
   let profileFlipTimer = null;
+  let manual;
 
   function hydrate(rawState) {
     const config = engine.normalizeConfig(rawState && rawState.config ? rawState.config : state.config);
@@ -28,25 +29,34 @@
       else resultValid = false;
     });
     if (assigned.size !== students.length) resultValid = false;
-    return { version: SeatMaster.constants.VERSION, config, seats, assignment: resultValid ? assignment : {}, hasDrawn: resultValid };
+    const hydrated = { version: SeatMaster.constants.VERSION, config, seats, assignment: resultValid ? assignment : {}, hasDrawn: resultValid,
+      resultSource: rawState && rawState.resultSource === "manual" ? "manual" : "draw", manualDraft: null };
+    if (rawState && rawState.manualDraft && typeof rawState.manualDraft === "object") hydrated.manualDraft = SeatMaster.manualSeating.normalize(hydrated, rawState.manualDraft);
+    return hydrated;
   }
 
   function saveSoon() {
     ui.setSaveStatus(i18n.t("common.saving"));
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => {
+      saveTimer = null;
       storage.save(state);
       ui.setSaveStatus(i18n.t("common.saved"));
     }, 180);
   }
 
   function render(options) {
+    const focusedSeat = document.activeElement.closest(".seat")?.dataset.seatId;
     const presentation = document.body.classList.contains("presentation-mode");
     if (!options || !options.keepInputs) ui.fillInputs(state);
-    ui.renderSummary(state);
+    const manualActive = adminMode === "manual" && !presentation;
+    if (manualActive && !state.manualDraft) manual.start();
+    ui.renderSummary(manualActive ? { ...state, seats: state.seats.map((s) => ({ ...s, pin: null, type: s.type === "aisle" ? "aisle" : "general" })) } : state);
     ui.renderRoomMarkers(state);
     ui.renderSeatGrid(state, presentation, adminMode, selectedAdjustmentSeatId);
     updateAdminModeUI();
+    if (manual) manual.render(manualActive);
+    if (manualActive && focusedSeat) document.querySelector(`.seat[data-seat-id="${focusedSeat}"]`)?.focus({ preventScroll: true });
     ui.positionValidationNotice();
   }
 
@@ -66,6 +76,7 @@
       help.textContent = i18n.t(`mode.${adminMode}Help`);
     }
     const pinCount = state.seats.filter((seat) => seat.pin).length;
+    document.getElementById("prearrangeCount").hidden = adminMode === "manual";
     document.getElementById("prearrangeCount").textContent = adminMode === "adjust" && !state.hasDrawn ? i18n.t("mode.adjustUnavailable") : i18n.t("mode.prearrangeCount", { count: pinCount });
     document.getElementById("presentationButton").textContent = i18n.t(state.hasDrawn ? "common.returnResult" : "common.presentation");
   }
@@ -117,12 +128,17 @@
 
   function updateFromInputs() {
     const config = readConfigFromInputs();
+    const previous = state.config;
+    const cosmeticOnly = ["rows", "cols", "maxNumber", "emptyNumbers", "femaleStart", "studentData"].every((key) => previous[key] === config[key]);
     state.config = config;
+    if (cosmeticOnly) { render(); saveSoon(); return; }
     state.seats = engine.buildSeatGrid(config, state.seats);
     const validNumbers = new Set(engine.buildStudents(config).map((student) => student.number));
     state.seats.forEach((seat) => { if (seat.pin && !validNumbers.has(seat.pin)) seat.pin = null; });
     state.assignment = {};
     state.hasDrawn = false;
+    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    if (manual) manual.reset();
     selectedAdjustmentSeatId = null;
     render();
     saveSoon();
@@ -148,6 +164,8 @@
     state.config = engine.normalizeConfig(rotated.config);
     state.seats = rotated.seats;
     state.assignment = rotated.assignment;
+    if (state.manualDraft) state.manualDraft = Object.fromEntries(Object.entries(state.manualDraft).map(([id, number]) => [rotated.idMap.get(id), number]));
+    manual.reset();
     selectedAdjustmentSeatId = selectedAdjustmentSeatId ? rotated.idMap.get(selectedAdjustmentSeatId) || null : null;
     activePinSeatId = null;
     const dialog = document.getElementById("pinDialog");
@@ -170,6 +188,8 @@
     if (seat.type === "aisle") seat.pin = null;
     state.assignment = {};
     state.hasDrawn = false;
+    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    if (manual) manual.reset();
     selectedAdjustmentSeatId = null;
     render({ keepInputs: true });
     saveSoon();
@@ -186,6 +206,8 @@
     });
     state.assignment = {};
     state.hasDrawn = false;
+    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    if (manual) manual.reset();
     selectedAdjustmentSeatId = null;
     render({ keepInputs: true });
     saveSoon();
@@ -197,6 +219,8 @@
     state.seats = result.seats;
     state.assignment = {};
     state.hasDrawn = false;
+    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    if (manual) manual.reset();
     selectedAdjustmentSeatId = null;
     adminMode = "layout";
     render({ keepInputs: true });
@@ -237,14 +261,31 @@
     seat.pin = Number.isInteger(value) ? value : null;
     state.assignment = {};
     state.hasDrawn = false;
+    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    if (manual) manual.reset();
     selectedAdjustmentSeatId = null;
     render({ keepInputs: true });
     saveSoon();
     if (engine.validate(state).valid) ui.showToast(seat.pin ? i18n.t("toast.pinned", { number: seat.pin }) : i18n.t("toast.unpinned"));
   }
 
+  function finishManual() {
+    state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    const pending = SeatMaster.manualSeating.remaining(state, state.manualDraft);
+    if (pending.length) { ui.showToast(i18n.t("manual.incomplete", { count: pending.length }), "error"); return; }
+    state.assignment = { ...state.manualDraft };
+    state.hasDrawn = true;
+    state.resultSource = "manual";
+    state.manualDraft = null;
+    manual.reset();
+    adminMode = "adjust";
+    saveSoon();
+    enterPresentation();
+  }
+
   function enterPresentation() {
-    const report = engine.validate(state);
+    if (adminMode === "manual") { finishManual(); return; }
+    const report = state.hasDrawn && state.resultSource === "manual" ? { valid: true } : engine.validate(state);
     if (!report.valid) {
       ui.showToast(i18n.t("toast.fixFirst"), "error");
       ui.setValidationAnchor("#presentationButton");
@@ -259,7 +300,7 @@
     document.body.classList.add("presentation-mode");
     window.scrollTo(0, 0);
     document.getElementById("drawButtonText").textContent = i18n.t(state.hasDrawn ? "draw.redraw" : "draw.start");
-    document.getElementById("drawMessage").textContent = i18n.t(state.hasDrawn ? "draw.done" : "draw.ready");
+    document.getElementById("drawMessage").textContent = i18n.t(state.hasDrawn ? state.resultSource === "manual" ? "manual.done" : "draw.done" : "draw.ready");
     updateSoundButton();
     render({ keepInputs: true });
   }
@@ -323,10 +364,11 @@
   }
 
   function setAdminMode(mode) {
-    if (!['layout', 'prearrange', 'adjust'].includes(mode)) return;
+    if (!['layout', 'prearrange', 'manual', 'adjust'].includes(mode)) return;
     if (mode === "adjust" && !state.hasDrawn) return;
     adminMode = mode;
     selectedAdjustmentSeatId = null;
+    if (mode === "manual") { manual.start(); saveSoon(); }
     render({ keepInputs: true });
   }
 
@@ -424,6 +466,9 @@
       onReveal() {
         state.assignment = assignment;
         state.hasDrawn = true;
+        state.resultSource = "draw";
+        state.manualDraft = null;
+        manual.reset();
         render({ keepInputs: true });
         document.querySelectorAll(".seat:not(.is-aisle)").forEach((element, index) => {
           element.style.setProperty("--reveal-delay", `${Math.min(index * 18, 640)}ms`);
@@ -462,7 +507,7 @@
     } else if (state.hasDrawn) {
       render({ keepInputs: true });
       document.getElementById("drawButtonText").textContent = i18n.t("draw.redraw");
-      document.getElementById("drawMessage").textContent = i18n.t("draw.done");
+      document.getElementById("drawMessage").textContent = i18n.t(state.resultSource === "manual" ? "manual.done" : "draw.done");
     } else {
       render({ keepInputs: true });
       document.getElementById("drawButtonText").textContent = i18n.t("draw.start");
@@ -482,6 +527,9 @@
       window.visualViewport.addEventListener("resize", positionNotice);
       window.visualViewport.addEventListener("scroll", positionNotice);
     }
+    window.addEventListener("pagehide", () => {
+      if (saveTimer !== null) { window.clearTimeout(saveTimer); saveTimer = null; storage.save(state); }
+    });
     document.getElementById("validationToggle").addEventListener("click", ui.toggleValidationNotice);
     document.querySelector(".control-panel").addEventListener("input", () => ui.setValidationAnchor(null), true);
     document.getElementById("pinStudentSelect").addEventListener("change", previewPin);
@@ -511,6 +559,7 @@
         openStudentProfile(seat.dataset.seatId);
       } else if (seat) {
         if (adminMode === "prearrange") openPinDialog(seat.dataset.seatId);
+        else if (adminMode === "manual") manual.selectSeat(seat.dataset.seatId);
         else if (adminMode === "adjust") selectAdjustmentSeat(seat.dataset.seatId);
         else cycleSeat(seat.dataset.seatId);
       }
@@ -521,6 +570,7 @@
         event.preventDefault();
         if (document.body.classList.contains("presentation-mode")) openStudentProfile(event.target.dataset.seatId);
         else if (adminMode === "prearrange") openPinDialog(event.target.dataset.seatId);
+        else if (adminMode === "manual") manual.selectSeat(event.target.dataset.seatId);
         else if (adminMode === "adjust") selectAdjustmentSeat(event.target.dataset.seatId);
         else cycleSeat(event.target.dataset.seatId);
       }
@@ -529,6 +579,7 @@
     document.getElementById("pinForm").addEventListener("submit", (event) => {
       if (event.submitter && event.submitter.value === "default") applyPin();
     });
+    document.getElementById("manualStartButton").addEventListener("click", () => { setAdminMode("manual"); document.getElementById("manualPanel").scrollIntoView({ block: "start" }); });
     document.getElementById("presentationButton").addEventListener("click", enterPresentation);
     document.getElementById("adminButton").addEventListener("click", exitPresentation);
     document.getElementById("drawButton").addEventListener("click", startDraw);
@@ -569,6 +620,8 @@
       if (!file) return;
       try {
         state = hydrate(await storage.readImport(file));
+        manual.reset();
+        adminMode = state.manualDraft ? "manual" : "layout";
         storage.save(state);
         render();
         ui.showToast(i18n.t("toast.imported"));
@@ -592,6 +645,7 @@
       storage.clear();
       state = hydrate(SeatMaster.createDefaultState());
       adminMode = "layout";
+      manual.reset();
       selectedAdjustmentSeatId = null;
       storage.save(state);
       render();
@@ -601,6 +655,8 @@
 
   function init() {
     state = hydrate(storage.load() || SeatMaster.createDefaultState());
+    manual = SeatMaster.manualSeating.createController(() => state, (persist = true) => { render({ keepInputs: true }); if (persist) saveSoon(); }, finishManual);
+    if (state.manualDraft) adminMode = "manual";
     i18n.apply();
     ui.populateRoomPositionOptions();
     bindEvents();

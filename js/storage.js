@@ -10,7 +10,9 @@
       config: { ...state.config },
       seats: state.seats.map((seat) => ({ id: seat.id, row: seat.row, col: seat.col, type: seat.type, pin: seat.pin || null })),
       assignment: state.hasDrawn ? { ...state.assignment } : {},
-      hasDrawn: Boolean(state.hasDrawn)
+      hasDrawn: Boolean(state.hasDrawn),
+      resultSource: state.resultSource || "draw",
+      manualDraft: state.manualDraft ? { ...state.manualDraft } : null
     };
   }
 
