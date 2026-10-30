@@ -165,6 +165,116 @@
 
   function renderSeatGrid(state, presentation, adminMode, selectedSeatId) {
     const grid = document.getElementById("seatGrid");
+    const dimensionControls = document.getElementById("gridDimensions");
+    if (state.roomLayout && Array.isArray(state.roomLayout.tables)) {
+      grid.className = `room-canvas${state.roomLayout.editing && !presentation ? " is-editing" : ""}`;
+      grid.removeAttribute("style");
+      grid.style.zoom = String(state.roomLayout.zoom || 1);
+      if (dimensionControls) dimensionControls.hidden = true;
+      const students = SeatMaster.engine.buildStudents(state.config);
+      const records = SeatMaster.engine.parseStudentRecords(state.config.studentData, students);
+      const directory = SeatMaster.engine.parseStudentNames(state.config.studentData, students);
+      const html = [];
+      let collisionCount = 0;
+      (state.roomLayout.paths || []).forEach((path) => {
+        html.push(`<div class="room-path${path.id === state.roomLayout.selectedPathId ? " is-selected" : ""}" data-path-id="${escapeHtml(path.id)}" style="left:${path.x}%;top:${path.y}%;width:${path.width}%;height:${path.height}%">${escapeHtml(path.label)}${state.roomLayout.editing && !presentation ? `<button class="room-path-handle" data-path-handle="true" type="button" aria-label="${escapeHtml(i18n.t("room.movePath"))}"></button>` : ""}</div>`);
+      });
+      state.roomLayout.tables.forEach((table, index) => {
+        const points = SeatMaster.roomLayout.seatPoints(table, table.seatIds.length);
+        const widthPx = Math.max(1, grid.clientWidth * table.width / 100);
+        const heightPx = Math.max(1, grid.clientHeight * table.height / 100);
+        let minimumDistance = 60;
+        for (let left = 0; left < points.length; left += 1) for (let right = left + 1; right < points.length; right += 1) {
+          const dx = (points[left].x - points[right].x) * widthPx / 100;
+          const dy = (points[left].y - points[right].y) * heightPx / 100;
+          minimumDistance = Math.min(minimumDistance, Math.hypot(dx, dy));
+        }
+        const seatSize = Math.max(26, Math.min(48, minimumDistance * 0.82));
+        const overlapping = new Set();
+        for (let left = 0; left < points.length; left += 1) for (let right = left + 1; right < points.length; right += 1) {
+          const dx = Math.abs(points[left].x - points[right].x) * widthPx / 100;
+          const dy = Math.abs(points[left].y - points[right].y) * heightPx / 100;
+          if (dx < seatSize && dy < seatSize * 0.8) { overlapping.add(table.seatIds[left]); overlapping.add(table.seatIds[right]); }
+        }
+        collisionCount += overlapping.size;
+        const tableStyle = `left:${table.x}%;top:${table.y}%;width:${table.width}%;height:${table.height}%;--room-seat-size:${seatSize}px;--room-seat-height:${seatSize * 0.8}px;transform:translate(-50%,-50%) rotate(${table.rotation}deg)`;
+        html.push(`<div class="room-table room-table-${table.type}${table.type === "u" ? ` room-table-u-open-${table.geometry?.opening || "bottom"}` : ""}${table.id === state.roomLayout.selectedTableId ? " is-selected" : ""}" data-table-id="${escapeHtml(table.id)}" style="${tableStyle}"><div class="room-table-surface">${escapeHtml(i18n.t("room.table", { number: index + 1 }))}</div>${state.roomLayout.editing && !presentation ? `<button class="room-table-drag-handle" type="button" data-table-handle="true" aria-label="${escapeHtml(i18n.t("room.moveTable", { number: index + 1 }))}">${escapeHtml(i18n.t("room.table", { number: index + 1 }))}</button>` : ""}`);
+        table.seatIds.forEach((seatId, seatIndex) => {
+          const seat = state.seats.find((item) => item.id === seatId);
+          if (!seat) return;
+          const point = points[seatIndex] || { x: 50, y: 50 };
+          const classes = ["seat"];
+          if (state.roomLayout.editing && !presentation) classes.push("room-seat-editable");
+          if (state.roomLayout.selectedSeatId === seat.id) classes.push("is-room-seat-selected");
+          if (overlapping.has(seat.id)) classes.push("is-room-seat-collision");
+          const assignedNumber = presentation && state.hasDrawn ? state.assignment[seat.id] : null;
+          const hasProfile = Number.isInteger(assignedNumber) && records.has(assignedNumber);
+          if (presentation && hasProfile) classes.push("has-profile");
+          if (!presentation && adminMode === "prearrange") classes.push("prearrange-seat", seat.pin ? "is-pinned-seat" : "");
+          if (!presentation && (adminMode === "adjust" || adminMode === "manual")) classes.push("admin-adjust-seat", selectedSeatId === seat.id ? "is-swap-selected" : "");
+          html.push(`<div class="${classes.filter(Boolean).join(" ")}" data-seat-id="${escapeHtml(seat.id)}" ${state.roomLayout.editing && !presentation ? 'data-room-seat-handle="true"' : ""} data-type="${presentation ? "general" : seat.type}" role="button" tabindex="${presentation && !hasProfile ? "-1" : "0"}" aria-label="${presentation ? escapeHtml(hasProfile ? i18n.t("profile.openCard") : i18n.t("room.seat")) : escapeHtml(typeLabel(seat.type))}" style="left:${point.x}%;top:${point.y}%">${seatContent(seat, state, presentation, directory, adminMode)}${presentation && hasProfile ? '<span class="profile-indicator" aria-hidden="true">＋</span>' : ""}</div>`);
+        });
+        html.push("</div>");
+      });
+      grid.innerHTML = html.join("");
+      const geometryStatus = document.getElementById("roomGeometryStatus");
+      if (geometryStatus) {
+        geometryStatus.hidden = false;
+        geometryStatus.textContent = collisionCount ? i18n.t("room.seatOverlap", { count: collisionCount }) : i18n.t("room.geometryOk");
+        geometryStatus.classList.toggle("is-warning", collisionCount > 0);
+      }
+      const toolbar = document.getElementById("roomLayoutToolbar");
+      if (toolbar) toolbar.hidden = presentation;
+      document.querySelectorAll("[data-gender-pattern]").forEach((button) => {
+        button.hidden = state.roomLayout.tables.length > 0
+          ? button.dataset.genderPattern !== "tableSequence"
+          : button.dataset.genderPattern === "tableSequence";
+      });
+      const editToggle = document.getElementById("roomEditToggle");
+      if (editToggle) editToggle.checked = Boolean(state.roomLayout.editing);
+      const pathWidth = document.getElementById("roomPathWidthInput");
+      const selectedPath = state.roomLayout.paths.find((path) => path.id === state.roomLayout.selectedPathId);
+      if (pathWidth) pathWidth.value = selectedPath ? String(selectedPath.width) : "8";
+      const selectedTable = state.roomLayout.tables.find((table) => table.id === state.roomLayout.selectedTableId);
+      const selectedSeat = (selectedTable?.seatPositions || []).find((position) => position.id === state.roomLayout.selectedSeatId);
+      const seatCount = document.getElementById("roomSeatCountInput");
+      if (seatCount) { seatCount.value = selectedTable ? String(selectedTable.seatIds.length) : "1"; seatCount.disabled = !selectedTable; }
+      ["roomSeatXInput", "roomSeatYInput"].forEach((id) => { const input = document.getElementById(id); if (input) { input.disabled = !selectedSeat; input.value = selectedSeat ? String(Math.round(selectedSeat[id === "roomSeatXInput" ? "x" : "y"] * 10) / 10) : ""; } });
+      const shape = document.getElementById("roomTableTypeSelect");
+      if (shape) { shape.value = selectedTable?.type || "rect"; shape.disabled = !selectedTable; }
+      const tableWidth = document.getElementById("roomTableWidthInput");
+      const tableHeight = document.getElementById("roomTableHeightInput");
+      if (tableWidth) { tableWidth.value = String(selectedTable?.width || 30); tableWidth.disabled = !selectedTable; }
+      if (tableHeight) { tableHeight.value = String(selectedTable?.height || 30); tableHeight.disabled = !selectedTable; }
+      const zoom = document.getElementById("roomZoomInput");
+      const zoomOutput = document.getElementById("roomZoomOutput");
+      if (zoom) zoom.value = String(Math.round((state.roomLayout.zoom || 1) * 100));
+      if (zoomOutput) zoomOutput.value = `${Math.round((state.roomLayout.zoom || 1) * 100)}%`;
+      const openingControl = document.getElementById("roomUOpeningControl");
+      const opening = document.getElementById("roomUOpeningSelect");
+      if (openingControl) openingControl.hidden = selectedTable?.type !== "u";
+      if (opening) opening.value = selectedTable?.geometry?.opening || "bottom";
+      const roundControl = document.getElementById("roomRoundRadiusControl");
+      const radius = document.getElementById("roomRoundRadiusInput");
+      if (roundControl) roundControl.hidden = selectedTable?.type !== "round";
+      if (radius) radius.value = String(selectedTable?.geometry?.seatRadius || 44);
+      const edgeControls = document.getElementById("roomEdgeControls");
+      if (edgeControls) edgeControls.hidden = !selectedTable || selectedTable.type === "round";
+      const edgeCounts = selectedTable?.edgeCounts || SeatMaster.roomLayout.defaultEdgeCounts(selectedTable || { type: "rect" }, selectedTable?.seatIds.length || 0);
+      document.querySelectorAll("[data-room-edge]").forEach((input) => { input.value = String(edgeCounts[input.dataset.roomEdge] || 0); input.disabled = !selectedTable; input.parentElement.hidden = selectedTable?.type === "u" && input.dataset.roomEdge === (selectedTable.geometry?.opening || "bottom"); });
+      ["roomRotateLeft", "roomRotateRight", "roomDuplicateTable", "roomDeleteTable", "roomAddSeat", "roomAutoArrangeSeats"].forEach((id) => { const button = document.getElementById(id); if (button) button.disabled = !selectedTable; });
+      const removeSeat = document.getElementById("roomRemoveSeat");
+      if (removeSeat) removeSeat.disabled = !selectedTable || selectedTable.seatIds.length <= 1;
+      return;
+    }
+    grid.className = "seat-grid";
+    grid.removeAttribute("style");
+    if (dimensionControls) dimensionControls.hidden = false;
+    const toolbar = document.getElementById("roomLayoutToolbar");
+    if (toolbar) toolbar.hidden = true;
+    document.querySelectorAll("[data-gender-pattern]").forEach((button) => { button.hidden = button.dataset.genderPattern === "tableSequence"; });
+      const geometryStatus = document.getElementById("roomGeometryStatus");
+      if (geometryStatus) geometryStatus.hidden = true;
     grid.style.setProperty("--cols", state.config.cols);
     const html = [];
     const students = SeatMaster.engine.buildStudents(state.config);
@@ -197,18 +307,20 @@
   function renderSummary(state) {
     const students = SeatMaster.engine.buildStudents(state.config);
     const male = students.filter((student) => student.gender === "male").length;
-    const female = students.length - male;
+    const female = students.filter((student) => student.gender === "female").length;
+    const required = SeatMaster.engine.studentsRequiringSeats(state.config);
     const usable = state.seats.filter((seat) => seat.type !== "aisle").length;
-    const emptyDesks = Math.max(0, usable - students.length);
+    const emptyDesks = Math.max(0, usable - required.length);
 
     document.getElementById("studentSummary").innerHTML = `
       <div class="summary-chip"><strong>${male}</strong><span>${escapeHtml(i18n.t("summary.male"))}</span></div>
       <div class="summary-chip"><strong>${female}</strong><span>${escapeHtml(i18n.t("summary.female"))}</span></div>
-      <div class="summary-chip"><strong>${students.length}</strong><span>${escapeHtml(i18n.t("summary.total"))}</span></div>`;
+      <div class="summary-chip"><strong>${students.length}</strong><span>${escapeHtml(i18n.t("summary.total"))}</span></div>
+      <div class="summary-chip"><strong>${students.length - required.length}</strong><span>${escapeHtml(i18n.t("summary.noSeat"))}</span></div>`;
     document.getElementById("stageTitle").textContent = i18n.t("stage.title", { className: state.config.className });
     document.getElementById("pageTitle").textContent = i18n.t("stage.pageTitle", { className: state.config.className });
     document.querySelector(".stage-heading .presentation-only").textContent = i18n.t(state.resultSource === "manual" ? "manual.resultTitle" : "stage.draw");
-    document.getElementById("stageSubtitle").textContent = i18n.t("stage.subtitle", { seats: usable, students: students.length, empty: emptyDesks });
+    document.getElementById("stageSubtitle").textContent = i18n.t("stage.subtitle", { seats: usable, students: required.length, empty: emptyDesks });
 
     const report = SeatMaster.engine.validate(state);
     const badge = document.getElementById("capacityBadge");
@@ -231,6 +343,7 @@
       colsInput: "cols",
       maxNumberInput: "maxNumber",
       emptyNumbersInput: "emptyNumbers",
+      seatExcludedNumbersInput: "seatExcludedNumbers",
       femaleStartInput: "femaleStart",
       displayModeInput: "displayMode",
       studentDataInput: "studentData",

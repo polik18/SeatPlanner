@@ -4,8 +4,8 @@
   const SeatMaster = (window.SeatMaster = window.SeatMaster || {});
 
   SeatMaster.constants = Object.freeze({
-    STORAGE_KEY: "classroom-seat-master:v1",
-    VERSION: 1,
+    STORAGE_KEY: "classroom-seat-master:v3",
+    VERSION: 3,
     SEAT_TYPES: ["general", "male", "female", "aisle"],
     TYPE_LABELS: Object.freeze({
       general: "不限性別",
@@ -19,6 +19,7 @@
       cols: 4,
       maxNumber: 34,
       emptyNumbers: "16-20",
+      seatExcludedNumbers: "",
       femaleStart: 21,
       displayMode: "number",
       studentData: "",
@@ -37,7 +38,9 @@
       config: { ...SeatMaster.constants.DEFAULT_CONFIG },
       seats: [],
       assignment: {},
-      hasDrawn: false
+      hasDrawn: false,
+      activities: [],
+      roomLayout: null
     };
   };
 })();

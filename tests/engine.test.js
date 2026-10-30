@@ -23,6 +23,23 @@ assert.equal(students.length, 29);
 assert.equal(students.filter((student) => student.gender === "male").length, 15);
 assert.equal(students.filter((student) => student.gender === "female").length, 14);
 
+const excludedConfig = engine.normalizeConfig({ ...state.config, maxNumber: 8, emptyNumbers: "", femaleStart: 5, seatExcludedNumbers: "2, 6-7" });
+const excludedRoster = engine.buildStudents(excludedConfig);
+assert.equal(excludedRoster.length, 8, "non-seated students stay in the class roster");
+assert.deepEqual(Array.from(engine.studentsRequiringSeats(excludedConfig), (student) => student.number), [1, 3, 4, 5, 8]);
+const genderRoster = "座號\t姓名\t性別\n1\t甲\t女\n2\t乙\t男";
+const genderStudents = engine.buildStudents(engine.normalizeConfig({ maxNumber: 2, emptyNumbers: "", femaleStart: 2, studentData: genderRoster }));
+assert.deepEqual(Array.from(genderStudents, (student) => student.gender), ["female", "male"], "explicit roster gender overrides the number-range default");
+assert.match(engine.normalizeStudentData(genderRoster, genderStudents).split("\n")[0], /性別/);
+const excludedSeats = engine.buildSeatGrid(engine.normalizeConfig({ rows: 1, cols: 5, maxNumber: 8, emptyNumbers: "", femaleStart: 5, seatExcludedNumbers: "2,6-7" }), []);
+const excludedSeatState = { config: excludedConfig, seats: engine.buildSeatGrid(excludedConfig, []) };
+excludedSeatState.config.rows = 1; excludedSeatState.config.cols = 5;
+excludedSeatState.seats = excludedSeats;
+assert.equal(engine.validate(excludedSeatState).valid, true, "only students requiring seats count toward seating capacity");
+const excludedAssignment = engine.arrange(excludedSeatState);
+assert.equal(Object.values(excludedAssignment).filter(Number.isInteger).length, 5);
+assert.ok(!Object.values(excludedAssignment).includes(2) && !Object.values(excludedAssignment).includes(6));
+
 const names = engine.parseStudentNames("1, 王小明\n2：李小華\n陳小美", students);
 assert.equal(names.get(1), "王小明");
 assert.equal(names.get(2), "李小華");

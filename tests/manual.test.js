@@ -37,6 +37,15 @@ for (const [number, id] of [[1, "0-0"], [1, "1-2"], [3, "0-1"], [99, "0-1"], [1,
   assert.equal(JSON.stringify(manual.place(state, draft, number, id)), saved);
 }
 assert.equal(JSON.stringify(draft), saved, "operations must not mutate their source");
+
+const noSeatState = createDefaultState();
+noSeatState.config = engine.normalizeConfig({ ...noSeatState.config, rows: 1, cols: 3, maxNumber: 5, emptyNumbers: "", seatExcludedNumbers: "2,5" });
+noSeatState.seats = engine.buildSeatGrid(noSeatState.config, []);
+const noSeatDraft = manual.normalize(noSeatState, { "0-0": 1, "0-1": 2, "0-2": 3 });
+assert.deepEqual(Object.values(noSeatDraft), [1, null, 3]);
+assert.deepEqual(Array.from(manual.remaining(noSeatState, noSeatDraft), (student) => student.number), [4]);
+assert.equal(manual.place(noSeatState, noSeatDraft, 2, "0-1")["0-1"], null);
+assert.equal(manual.remaining(noSeatState, { "0-0": 1, "0-1": 3, "0-2": 4 }).length, 0, "non-seated roster members do not block manual completion");
 // Exhaust all valid student/desk moves from each generated state.
 for (let round = 0; round < 12; round++) {
   for (const number of [1, 2, 4, 5]) {
@@ -60,7 +69,8 @@ assert.ok(!Object.values(reconciled).includes(2));
 // Partial drafts round-trip separately from a completed result, and old v1
 // exports without a draft remain valid input.
 let serialized;
-context.localStorage = { setItem(_key, value) { serialized = value; } };
+const localValues = new Map();
+context.localStorage = { setItem(key, value) { serialized = value; localValues.set(key, value); }, getItem(key) { return localValues.get(key) || null; }, removeItem(key) { localValues.delete(key); } };
 vm.runInContext(fs.readFileSync(path.join(__dirname, "../js/storage.js"), "utf8"), context);
 context.window.SeatMaster.storage.save({ ...state, manualDraft: reconciled, hasDrawn: false });
 assert.deepEqual(JSON.parse(serialized).manualDraft, plain(reconciled));
@@ -68,4 +78,15 @@ assert.deepEqual(JSON.parse(serialized).assignment, {});
 context.window.SeatMaster.storage.save({ ...state, manualDraft: null, assignment: draft, hasDrawn: true, resultSource: "manual" });
 assert.equal(JSON.parse(serialized).resultSource, "manual");
 assert.deepEqual(JSON.parse(serialized).assignment, plain(draft));
+context.window.SeatMaster.storage.save({ ...state, activities: [{ id: "task-1" }], roomLayout: { version: 1, template: "u", tables: [], paths: [] } });
+assert.equal(JSON.parse(serialized).version, 3);
+assert.equal(JSON.parse(serialized).activities[0].id, "task-1");
+assert.equal(JSON.parse(serialized).roomLayout.template, "u");
+localValues.set("classroom-seat-master:v1", JSON.stringify({ version: 1, config: { maxNumber: 5 }, seats: [], hasDrawn: false }));
+localValues.delete(context.window.SeatMaster.constants.STORAGE_KEY);
+const migrated = context.window.SeatMaster.storage.load();
+assert.equal(migrated.version, 3);
+assert.equal(migrated.config.seatExcludedNumbers, "");
+assert.deepEqual(Array.from(migrated.activities), []);
+assert.equal(migrated.roomLayout, null);
 console.log("manual seating tests passed");

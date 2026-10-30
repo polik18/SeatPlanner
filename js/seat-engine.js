@@ -45,13 +45,23 @@
     const maxNumber = clampInteger(config.maxNumber, 1, 999, 34);
     const femaleStart = clampInteger(config.femaleStart, 1, maxNumber + 1, 21);
     const empty = parseEmptyNumbers(config.emptyNumbers, maxNumber);
+    const seatExcluded = parseEmptyNumbers(config.seatExcludedNumbers, maxNumber);
     const students = [];
     for (let number = 1; number <= maxNumber; number += 1) {
       if (!empty.has(number)) {
-        students.push({ number, gender: number >= femaleStart ? "female" : "male" });
+        students.push({ number, gender: number >= femaleStart ? "female" : "male", requiresSeat: !seatExcluded.has(number), participatesInActivities: true });
       }
     }
+    const records = parseStudentRecords(config.studentData || config.studentNames || "", students);
+    records.forEach((record, number) => {
+      const student = students.find((item) => item.number === number);
+      if (student && record.gender) student.gender = record.gender;
+    });
     return students;
+  }
+
+  function studentsRequiringSeats(config) {
+    return buildStudents(config).filter((student) => student.requiresSeat);
   }
 
   function splitStudentDataCells(rawLine) {
@@ -66,6 +76,13 @@
 
   function isStudentDataHeader(cells) {
     return /^(?:座號|學號|號碼|number|no\.?)$/i.test(cells[0] || "") && /^(?:姓名|name)$/i.test(cells[1] || "");
+  }
+
+  function normalizeGender(value) {
+    const normalized = String(value || "").trim().toLocaleLowerCase();
+    if (["男", "男生", "male", "m", "boy"].includes(normalized)) return "male";
+    if (["女", "女生", "female", "f", "girl"].includes(normalized)) return "female";
+    return "";
   }
 
   function inferStudentNumbers(input) {
@@ -117,6 +134,8 @@
     let sequentialIndex = 0;
     let fieldHeaders = [];
     let hasStructuredHeader = false;
+    let genderIndex = -1;
+    let fieldIndexes = [];
 
     String(input || "").split(/\r?\n/).forEach((rawLine) => {
       const line = rawLine.trim();
@@ -124,18 +143,22 @@
       const cells = splitStudentDataCells(rawLine);
       if (isStudentDataHeader(cells)) {
         hasStructuredHeader = true;
-        fieldHeaders = cells.slice(2).map((label, index) => label || `${translated("studentData.field", { number: index + 1 }, "欄位 {number}")}`);
+        records.genderHeader = cells.some((label, index) => index >= 2 && /^(?:性別|gender|sex)$/i.test(label));
+        genderIndex = cells.findIndex((label, index) => index >= 2 && /^(?:性別|gender|sex)$/i.test(label));
+        fieldIndexes = cells.map((_, index) => index).filter((index) => index >= 2 && index !== genderIndex);
+        fieldHeaders = fieldIndexes.map((sourceIndex, index) => cells[sourceIndex] || `${translated("studentData.field", { number: index + 1 }, "欄位 {number}")}`);
         return;
       }
       if (/^\d+$/.test(cells[0] || "")) {
         const number = Number(cells[0]);
         if (!validNumbers.has(number)) return;
         const name = String(cells[1] || "").trim().slice(0, 50);
-        const fields = cells.slice(2).map((value, index) => ({
+        const indexes = cells.map((_, index) => index).filter((index) => index >= 2 && index !== genderIndex);
+        const fields = indexes.map((sourceIndex, index) => ({
           label: String(fieldHeaders[index] || translated("studentData.field", { number: index + 1 }, "欄位 {number}")).trim().slice(0, 30),
-          value: String(value || "").trim().slice(0, 300)
+          value: String(cells[sourceIndex] || "").trim().slice(0, 300)
         })).filter((field) => field.value);
-        records.set(number, { number, name, fields });
+        records.set(number, { number, name, gender: genderIndex >= 0 ? normalizeGender(cells[genderIndex]) : "", fields });
         return;
       }
 
@@ -171,13 +194,16 @@
       if (!fieldLabels.includes(field.label)) fieldLabels.push(field.label);
     }));
     const orderedRecords = roster.map((student) => records.get(student.number)).filter(Boolean);
-    if (!fieldLabels.length) return orderedRecords.map((record) => `${record.number}, ${record.name}`).join("\n");
+    const hasGender = Boolean(records.genderHeader || orderedRecords.some((record) => record.gender));
+    if (!fieldLabels.length && !hasGender) return orderedRecords.map((record) => `${record.number}, ${record.name}`).join("\n");
     const numberHeader = translated("studentData.number", {}, "座號");
     const nameHeader = translated("studentData.name", {}, "姓名");
-    const lines = [[numberHeader, nameHeader, ...fieldLabels].join("\t")];
+    const genderHeader = translated("studentData.gender", {}, "性別");
+    const lines = [[numberHeader, nameHeader, ...(hasGender ? [genderHeader] : []), ...fieldLabels].join("\t")];
     orderedRecords.forEach((record) => {
       const values = new Map(record.fields.map((field) => [field.label, field.value]));
-      lines.push([record.number, record.name, ...fieldLabels.map((label) => values.get(label) || "")].join("\t"));
+      const gender = record.gender || "";
+      lines.push([record.number, record.name, ...(hasGender ? [gender === "male" ? translated("studentData.male", {}, "男") : gender === "female" ? translated("studentData.female", {}, "女") : ""] : []), ...fieldLabels.map((label) => values.get(label) || "")].join("\t"));
     });
     return lines.join("\n");
   }
@@ -215,7 +241,7 @@
     return SEAT_TYPES[(index + 1 + SEAT_TYPES.length) % SEAT_TYPES.length];
   }
 
-  const GENDER_PATTERNS = ["rows", "columns", "checkerboard"];
+  const GENDER_PATTERNS = ["rows", "columns", "checkerboard", "tableSequence"];
 
   function genderPatternParity(seat, pattern) {
     if (pattern === "rows") return seat.row % 2;
@@ -224,9 +250,9 @@
     throw new Error("Unsupported gender pattern");
   }
 
-  function applyGenderPattern(config, seats, pattern) {
+  function applyGenderPattern(config, seats, pattern, roomOrder) {
     if (!GENDER_PATTERNS.includes(pattern)) throw new Error("Unsupported gender pattern");
-    const students = buildStudents(config);
+    const students = studentsRequiringSeats(config);
     const studentByNumber = new Map(students.map((student) => [student.number, student]));
     const usableCount = (seats || []).filter((seat) => seat.type !== "aisle").length;
     const genderCounts = {
@@ -238,7 +264,8 @@
       const otherGender = startGender === "male" ? "female" : "male";
       const mapped = (seats || []).map((seat) => {
         if (seat.type === "aisle") return { ...seat, pin: null };
-        return { ...seat, type: genderPatternParity(seat, pattern) ? otherGender : startGender };
+        const parity = pattern === "tableSequence" ? (roomOrder?.[seat.id]?.index || 0) % 2 : genderPatternParity(seat, pattern);
+        return { ...seat, type: parity ? otherGender : startGender };
       });
       const slotCounts = {
         male: mapped.filter((seat) => seat.type === "male").length,
@@ -354,6 +381,7 @@
       cols,
       maxNumber,
       emptyNumbers: String(config.emptyNumbers || "").trim(),
+      seatExcludedNumbers: formatNumberRanges(Array.from(parseEmptyNumbers(config.seatExcludedNumbers, maxNumber))),
       femaleStart: clampInteger(config.femaleStart, 1, maxNumber + 1, Math.min(21, maxNumber + 1)),
       displayMode,
       studentData: String(config.studentData !== undefined ? config.studentData : config.studentNames || "").slice(0, 50000),
@@ -427,7 +455,7 @@
   }
 
   function validate(state) {
-    const students = buildStudents(state.config);
+    const students = studentsRequiringSeats(state.config);
     const studentByNumber = new Map(students.map((student) => [student.number, student]));
     const usableSeats = state.seats.filter((seat) => seat.type !== "aisle");
     const errors = [];
@@ -510,6 +538,8 @@
     inferStudentNumbers,
     formatNumberRanges,
     buildStudents,
+    studentsRequiringSeats,
+    normalizeGender,
     parseStudentRecords,
     parseStudentNames,
     normalizeStudentData,

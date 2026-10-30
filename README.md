@@ -32,6 +32,10 @@
 - 關閉尚未揭曉的抽學生活動不會扣除名額；座位重抽中途退出會保留上一次已揭曉的結果
 - 音效可隨時開關，不需下載或連線外部音訊
 - JSON 設定匯入、匯出與本機自動儲存
+- 無實體座位名單仍參加班級活動；座位容量、預排、抽座位與手排完成條件只計需座位學生
+- 自由教室版型：島型小組桌、圓桌、U 型桌與輪椅／主要通道；可拖移、旋轉、複製桌組及調整座位數
+- 臨時任務分組：全班 2–6 人、隨機／男女均衡／同性別策略、預排成員與桌位、手動移組、鎖定後重抽、復原／重做及列印
+- 活動名冊與結果獨立保存並包含在 v3 JSON 備份中，不覆蓋日常座位結果
 
 ## 專案結構
 
@@ -48,8 +52,11 @@ SeatPlanner/
 ├── js/draw-effects.js     # 共用倒數、音效、揭曉與取消時序
 ├── js/student-draw.js     # 抽學生、本輪名單及紀錄
 ├── js/manual-seating.js  # 手動草稿、名單操作與復原／重做
+├── js/group-planner.js    # 任務分組與公平分組規則
+├── js/group-ui.js         # 任務建立、座位指派、復原與列印
+├── js/room-layout.js      # 自由教室版型與座位幾何
 ├── js/app.js              # 狀態管理與事件協調
-└── tests/                # 無相依套件的引擎與抽籤時序測試
+└── tests/                # Node 單元測試與 Playwright 瀏覽器流程
 ```
 
 ## 測試
@@ -60,11 +67,18 @@ SeatPlanner/
 node tests/engine.test.js
 node tests/effects.test.js
 node tests/manual.test.js
+node tests/group-planner.test.js
+node tests/room-layout.test.js
 ```
 
 完整瀏覽器驗證（需 Python Playwright 與 Chromium）：`python tests/manual-browser.py`。
+新功能瀏覽器流程（同樣需要 Playwright 與 Chromium）：`python tests/features-browser.py`。
 
 手動排位操作、設計理由與資料行為見 [操作設計](docs/manual-seating.md)。
+
+功能規格與驗收範圍見 [增功能計畫](docs/feature-plan-2026-10.md)。
+
+自由教室座位重疊、桌位容量與單席位置編輯改善提案見 [教室版面改善計畫](docs/room-layout-improvement-plan.md)。
 
 ## 使用注意
 

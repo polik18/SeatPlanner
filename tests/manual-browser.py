@@ -11,7 +11,7 @@ import threading
 from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
-KEY = 'classroom-seat-master:v1'
+KEY = 'classroom-seat-master:v3'
 ARTIFACTS = Path(tempfile.mkdtemp(prefix='seatplanner-manual-'))
 
 class Handler(SimpleHTTPRequestHandler):

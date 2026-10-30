@@ -12,11 +12,60 @@
   let profileFlipTimer = null;
   let manual;
   let studentPicker;
+  let groupPlannerUi;
+  let selectedTableId = null;
+  let selectedPathId = null;
+  let roomPointerDrag = null;
+  let roomUndoStack = [];
+  let roomRedoStack = [];
+  const roomRangeEdits = new Set();
+
+  function roomEditSnapshot() {
+    return JSON.parse(JSON.stringify({ roomLayout: state.roomLayout, seats: state.seats, assignment: state.assignment, hasDrawn: state.hasDrawn, manualDraft: state.manualDraft || null }));
+  }
+
+  function recordRoomEdit() {
+    roomUndoStack.push(roomEditSnapshot());
+    if (roomUndoStack.length > 80) roomUndoStack.shift();
+    roomRedoStack = [];
+  }
+
+  function restoreRoomEdit(snapshot) {
+    state.roomLayout = snapshot.roomLayout;
+    state.seats = snapshot.seats;
+    state.assignment = snapshot.assignment;
+    state.hasDrawn = snapshot.hasDrawn;
+    state.manualDraft = snapshot.manualDraft;
+    selectedTableId = state.roomLayout?.selectedTableId || null;
+    selectedPathId = state.roomLayout?.selectedPathId || null;
+    render({ keepInputs: true });
+    saveSoon();
+  }
+
+  function undoRoomEdit() {
+    if (!roomUndoStack.length) return;
+    roomRedoStack.push(roomEditSnapshot());
+    restoreRoomEdit(roomUndoStack.pop());
+  }
+
+  function redoRoomEdit() {
+    if (!roomRedoStack.length) return;
+    roomUndoStack.push(roomEditSnapshot());
+    restoreRoomEdit(roomRedoStack.pop());
+  }
+
+  function startRoomRangeEdit(id) {
+    if (roomRangeEdits.has(id)) return;
+    roomRangeEdits.add(id);
+    recordRoomEdit();
+  }
 
   function hydrate(rawState) {
     const config = engine.normalizeConfig(rawState && rawState.config ? rawState.config : state.config);
-    const seats = engine.buildSeatGrid(config, rawState && rawState.seats ? rawState.seats : []);
-    const students = engine.buildStudents(config);
+    const hasRoomLayout = rawState && rawState.roomLayout && Array.isArray(rawState.roomLayout.tables);
+    const seats = hasRoomLayout ? SeatMaster.roomLayout.normalizeSeats(rawState.seats) : engine.buildSeatGrid(config, rawState && rawState.seats ? rawState.seats : []);
+    const roomLayout = hasRoomLayout ? SeatMaster.roomLayout.normalize(rawState.roomLayout, seats) : null;
+    const students = engine.studentsRequiringSeats(config);
     const validNumbers = new Set(students.map((student) => student.number));
     const usableIds = new Set(seats.filter((seat) => seat.type !== "aisle").map((seat) => seat.id));
     const sourceAssignment = rawState && rawState.hasDrawn && rawState.assignment && typeof rawState.assignment === "object" ? rawState.assignment : {};
@@ -31,7 +80,8 @@
     });
     if (assigned.size !== students.length) resultValid = false;
     const hydrated = { version: SeatMaster.constants.VERSION, config, seats, assignment: resultValid ? assignment : {}, hasDrawn: resultValid,
-      resultSource: rawState && rawState.resultSource === "manual" ? "manual" : "draw", manualDraft: null };
+      resultSource: rawState && rawState.resultSource === "manual" ? "manual" : "draw", manualDraft: null,
+      activities: Array.isArray(rawState && rawState.activities) ? rawState.activities : [], roomLayout };
     if (rawState && rawState.manualDraft && typeof rawState.manualDraft === "object") hydrated.manualDraft = SeatMaster.manualSeating.normalize(hydrated, rawState.manualDraft);
     hydrated.adminMode = ["layout", "prearrange", "manual", "adjust"].includes(rawState && rawState.adminMode) ? rawState.adminMode : hydrated.manualDraft ? "manual" : "layout";
     if (hydrated.adminMode === "adjust" && !resultValid) hydrated.adminMode = "layout";
@@ -57,6 +107,8 @@
     ui.renderSummary(manualActive ? { ...state, seats: state.seats.map((s) => ({ ...s, pin: null, type: s.type === "aisle" ? "aisle" : "general" })) } : state);
     ui.renderRoomMarkers(state);
     ui.renderSeatGrid(state, presentation, adminMode, selectedAdjustmentSeatId);
+    document.getElementById("roomUndoButton").disabled = !roomUndoStack.length;
+    document.getElementById("roomRedoButton").disabled = !roomRedoStack.length;
     updateAdminModeUI();
     if (manual) manual.render(manualActive);
     if (manualActive && focusedSeat) document.querySelector(`.seat[data-seat-id="${focusedSeat}"]`)?.focus({ preventScroll: true });
@@ -96,6 +148,7 @@
       cols: document.getElementById("colsInput").value,
       maxNumber: document.getElementById("maxNumberInput").value,
       emptyNumbers: document.getElementById("emptyNumbersInput").value,
+      seatExcludedNumbers: document.getElementById("seatExcludedNumbersInput").value,
       femaleStart: document.getElementById("femaleStartInput").value,
       displayMode: document.getElementById("displayModeInput").value,
       studentData: document.getElementById("studentDataInput").value,
@@ -137,11 +190,11 @@
   function updateFromInputs() {
     const config = readConfigFromInputs();
     const previous = state.config;
-    const cosmeticOnly = ["rows", "cols", "maxNumber", "emptyNumbers", "femaleStart", "studentData"].every((key) => previous[key] === config[key]);
+    const cosmeticOnly = ["rows", "cols", "maxNumber", "emptyNumbers", "femaleStart", "studentData", "seatExcludedNumbers"].every((key) => previous[key] === config[key]);
     state.config = config;
     if (cosmeticOnly) { render(); saveSoon(); return; }
-    state.seats = engine.buildSeatGrid(config, state.seats);
-    const validNumbers = new Set(engine.buildStudents(config).map((student) => student.number));
+    if (!state.roomLayout) state.seats = engine.buildSeatGrid(config, state.seats);
+    const validNumbers = new Set(engine.studentsRequiringSeats(config).map((student) => student.number));
     state.seats.forEach((seat) => { if (seat.pin && !validNumbers.has(seat.pin)) seat.pin = null; });
     state.assignment = {};
     state.hasDrawn = false;
@@ -168,6 +221,25 @@
   function rotateLayout(direction) {
     if (document.body.classList.contains("drawing-mode")) return;
     closeStudentProfile();
+    if (state.roomLayout) {
+      recordRoomEdit();
+      state.roomLayout.tables.forEach((table) => {
+        const oldX = table.x;
+        table.x = direction === "clockwise" ? 100 - table.y : table.y;
+        table.y = direction === "clockwise" ? oldX : 100 - oldX;
+        [table.width, table.height] = [table.height, table.width];
+        table.rotation = (table.rotation + (direction === "clockwise" ? 90 : 270)) % 360;
+      });
+      state.roomLayout.paths.forEach((path) => {
+        const oldX = path.x;
+        path.x = direction === "clockwise" ? 100 - path.y - path.height : path.y;
+        path.y = direction === "clockwise" ? oldX : 100 - oldX - path.width;
+        [path.width, path.height] = [path.height, path.width];
+      });
+      render({ keepInputs: true }); saveSoon();
+      ui.showToast(i18n.t(direction === "clockwise" ? "toast.rotatedClockwise" : "toast.rotatedCounterclockwise"));
+      return;
+    }
     const rotated = engine.rotateSeatLayout(state.config, state.seats, state.assignment, direction);
     state.config = engine.normalizeConfig(rotated.config);
     state.seats = rotated.seats;
@@ -186,6 +258,178 @@
     window.setTimeout(() => roomLayout.classList.remove("is-rotating"), 360);
     saveSoon();
     ui.showToast(i18n.t(direction === "clockwise" ? "toast.rotatedClockwise" : "toast.rotatedCounterclockwise"));
+  }
+
+  function applyRoomTemplate(template) {
+    if (template === "grid" && !state.roomLayout) return;
+    closeStudentProfile();
+    recordRoomEdit();
+    if (template === "grid") {
+      if (!state.roomLayout) return;
+      const oldSeats = new Map(state.seats.map((seat) => [seat.id, seat]));
+      const oldOrder = state.roomLayout.tables.flatMap((table) => table.seatIds).map((id) => oldSeats.get(id)).filter(Boolean);
+      const gridSeats = engine.buildSeatGrid(state.config, state.seats);
+      const newUsable = gridSeats.filter((seat) => seat.type !== "aisle");
+      const idMap = new Map();
+      oldOrder.forEach((oldSeat, index) => {
+        const nextSeat = newUsable[index];
+        if (!nextSeat) return;
+        idMap.set(oldSeat.id, nextSeat.id);
+        nextSeat.type = oldSeat.type;
+        nextSeat.pin = oldSeat.pin;
+      });
+      state.assignment = Object.fromEntries(Object.entries(state.assignment).filter(([id]) => idMap.has(id)).map(([id, number]) => [idMap.get(id), number]));
+      if (state.manualDraft) state.manualDraft = Object.fromEntries(Object.entries(state.manualDraft).filter(([id]) => idMap.has(id)).map(([id, number]) => [idMap.get(id), number]));
+      state.seats = gridSeats;
+      state.roomLayout = null;
+      selectedTableId = null; selectedPathId = null;
+      if (state.hasDrawn && new Set(Object.values(state.assignment).filter(Number.isInteger)).size !== engine.studentsRequiringSeats(state.config).length) { state.hasDrawn = false; state.assignment = {}; }
+      if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    } else {
+      const created = SeatMaster.roomLayout.createTemplate(state, template);
+      state.seats = created.seats;
+      state.roomLayout = created.roomLayout;
+      state.assignment = Object.fromEntries(state.seats.filter((seat) => seat.type !== "aisle").map((seat) => [seat.id, state.assignment[seat.id] ?? null]));
+      if (state.hasDrawn && new Set(Object.values(state.assignment).filter(Number.isInteger)).size !== engine.studentsRequiringSeats(state.config).length) { state.hasDrawn = false; state.assignment = {}; }
+      if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+      selectedTableId = state.roomLayout.tables[0]?.id || null;
+      state.roomLayout.selectedTableId = selectedTableId;
+      selectedPathId = state.roomLayout.paths[0]?.id || null;
+      state.roomLayout.selectedSeatId = null;
+    }
+    manual.reset();
+    render({ keepInputs: true }); saveSoon();
+  }
+
+  function rotateSelectedTable(delta) {
+    const table = state.roomLayout?.tables.find((item) => item.id === selectedTableId);
+    if (!table) return;
+    recordRoomEdit();
+    table.rotation = (table.rotation + delta + 360) % 360;
+    render({ keepInputs: true }); saveSoon();
+  }
+
+  function duplicateSelectedTable() {
+    const layout = state.roomLayout;
+    const source = layout?.tables.find((table) => table.id === selectedTableId);
+    if (!source) return;
+    recordRoomEdit();
+    const idNumber = layout.nextTableId++;
+    const copy = { ...source, id: `table-${idNumber}`, x: Math.min(90, source.x + 8), y: Math.min(90, source.y + 8), seatIds: [], seatPositions: [] };
+    source.seatIds.forEach(() => {
+      const index = layout.nextSeatId++;
+      const id = `free-${index}`;
+      state.seats.push({ id, row: Math.floor((state.seats.length) / 6), col: state.seats.length % 6, type: "general", pin: null });
+      copy.seatIds.push(id);
+      if (state.hasDrawn) state.assignment[id] = null;
+    });
+    copy.seatPositions = SeatMaster.roomLayout.autoSeatPositions(copy, copy.seatIds);
+    layout.tables.push(copy); selectedTableId = copy.id;
+    layout.selectedTableId = selectedTableId;
+    render({ keepInputs: true }); saveSoon();
+  }
+
+  function addRoomTable() {
+    const layout = state.roomLayout;
+    if (!layout) return;
+    recordRoomEdit();
+    const idNumber = layout.nextTableId++;
+    const table = { id: `table-${idNumber}`, type: "rect", x: 50, y: 50, width: 28, height: 28, rotation: 0, seatIds: [], seatPositions: [], edgeCounts: null, geometry: { opening: "bottom", seatRadius: 44, startAngle: -90, armThickness: 12 } };
+    for (let index = 0; index < 4; index += 1) {
+      const seatId = `free-${layout.nextSeatId++}`;
+      state.seats.push({ id: seatId, row: Math.floor(state.seats.length / 6), col: state.seats.length % 6, type: "general", pin: null });
+      table.seatIds.push(seatId);
+      if (state.hasDrawn) state.assignment[seatId] = null;
+    }
+    table.seatPositions = SeatMaster.roomLayout.autoSeatPositions(table, table.seatIds);
+    layout.tables.push(table); selectedTableId = table.id;
+    layout.selectedTableId = selectedTableId;
+    render({ keepInputs: true }); saveSoon();
+  }
+
+  function addSeatToSelectedTable() {
+    const layout = state.roomLayout;
+    const table = layout?.tables.find((item) => item.id === selectedTableId);
+    if (!table) return;
+    setSelectedTableSeatCount(table.seatIds.length + 1);
+  }
+
+  function removeSeatFromSelectedTable() {
+    const layout = state.roomLayout;
+    const table = layout?.tables.find((item) => item.id === selectedTableId);
+    if (!table || table.seatIds.length <= 1) return;
+    setSelectedTableSeatCount(table.seatIds.length - 1);
+  }
+
+  function setSelectedTableSeatCount(count, options = {}) {
+    const layout = state.roomLayout;
+    const table = layout?.tables.find((item) => item.id === selectedTableId);
+    if (!layout || !table) return;
+    if (!options.alreadyRecorded) recordRoomEdit();
+    if (options.resetEdges) table.edgeCounts = null;
+    const target = Math.max(1, Math.min(60, Math.round(Number(count) || 1)));
+    const oldIds = new Set(table.seatIds);
+    const next = SeatMaster.roomLayout.setSeatCount(table, table.seatIds, target, () => layout.nextSeatId++, Boolean(options.resetPositions));
+    table.seatIds = next.seatIds;
+    table.seatPositions = next.seatPositions;
+    const nextIds = new Set(table.seatIds);
+    state.seats = state.seats.filter((seat) => !oldIds.has(seat.id) || nextIds.has(seat.id));
+    table.seatIds.filter((id) => !oldIds.has(id)).forEach((id) => {
+      state.seats.push({ id, row: Math.floor(state.seats.length / 6), col: state.seats.length % 6, type: "general", pin: null });
+    });
+    const addedSeat = [...table.seatIds].reverse().find((id) => !oldIds.has(id));
+    if (addedSeat) layout.selectedSeatId = addedSeat;
+    if (state.hasDrawn) {
+      state.assignment = Object.fromEntries(state.seats.filter((seat) => seat.type !== "aisle").map((seat) => [seat.id, state.assignment[seat.id] ?? null]));
+      state.hasDrawn = Object.values(state.assignment).filter(Number.isInteger).length === engine.studentsRequiringSeats(state.config).length;
+      if (!state.hasDrawn) state.assignment = {};
+    }
+    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    if (!table.seatIds.includes(layout.selectedSeatId)) layout.selectedSeatId = null;
+    render({ keepInputs: true }); saveSoon();
+  }
+
+  function autoArrangeSelectedSeats() {
+    const table = state.roomLayout?.tables.find((item) => item.id === selectedTableId);
+    if (!table) return;
+    recordRoomEdit();
+    table.seatPositions = SeatMaster.roomLayout.autoSeatPositions(table, table.seatIds);
+    render({ keepInputs: true }); saveSoon();
+  }
+
+  function setSelectedSeatCoordinate(axis, value) {
+    const table = state.roomLayout?.tables.find((item) => item.id === selectedTableId);
+    const position = table?.seatPositions.find((item) => item.id === state.roomLayout.selectedSeatId);
+    if (!position) return;
+    recordRoomEdit();
+    position[axis] = Math.max(2, Math.min(98, Number(value) || 2));
+    render({ keepInputs: true }); saveSoon();
+  }
+
+  function deleteSelectedTable() {
+    const layout = state.roomLayout;
+    if (!layout || layout.tables.length < 2) { ui.showToast(i18n.t("room.keepOneTable"), "error"); return; }
+    const table = layout.tables.find((item) => item.id === selectedTableId);
+    if (!table) return;
+    recordRoomEdit();
+    const removed = new Set(table.seatIds);
+    layout.tables = layout.tables.filter((item) => item.id !== selectedTableId);
+    state.seats = state.seats.filter((seat) => !removed.has(seat.id));
+    state.assignment = {};
+    state.hasDrawn = false;
+    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    selectedTableId = layout.tables[0]?.id || null;
+    layout.selectedTableId = selectedTableId;
+    render({ keepInputs: true }); saveSoon();
+  }
+
+  function addRoomPath() {
+    const layout = state.roomLayout;
+    if (!layout) return;
+    recordRoomEdit();
+    const path = { id: `path-${Date.now()}`, x: 8, y: 45, width: 8, height: 10, label: i18n.t("room.wheelchairPath") };
+    layout.paths.push(path); selectedPathId = path.id; layout.selectedPathId = selectedPathId;
+    render({ keepInputs: true }); saveSoon();
   }
 
   function cycleSeat(seatId) {
@@ -223,7 +467,19 @@
 
   function applyGenderPattern(pattern) {
     closeStudentProfile();
-    const result = engine.applyGenderPattern(state.config, state.seats, pattern);
+    const roomOrder = pattern === "tableSequence" && state.roomLayout
+      ? Object.fromEntries(state.roomLayout.tables.flatMap((table) => {
+        const positions = new Map((table.seatPositions || []).map((position) => [position.id, position]));
+        return table.seatIds
+          .map((id) => ({ id, point: positions.get(id) }))
+          .sort((left, right) => {
+            const angle = (item) => Math.atan2((item.point?.y || 50) - 50, (item.point?.x || 50) - 50);
+            return angle(left) - angle(right);
+          })
+          .map(({ id }, index) => [id, { index }]);
+      }))
+      : null;
+    const result = engine.applyGenderPattern(state.config, state.seats, pattern, roomOrder);
     state.seats = result.seats;
     state.assignment = {};
     state.hasDrawn = false;
@@ -233,7 +489,7 @@
     adminMode = "layout";
     render({ keepInputs: true });
     saveSoon();
-    const patternKeys = { rows: "admin.genderRows", columns: "admin.genderColumns", checkerboard: "admin.genderCheckerboard" };
+    const patternKeys = { rows: "admin.genderRows", columns: "admin.genderColumns", checkerboard: "admin.genderCheckerboard", tableSequence: "admin.genderTableSequence" };
     const messages = [i18n.t("toast.genderPatternApplied", { pattern: i18n.t(patternKeys[pattern]) })];
     if (result.relaxedSeats) messages.push(i18n.t("toast.genderPatternRelaxed", { count: result.relaxedSeats }));
     if (result.clearedPins.length) messages.push(i18n.t("toast.genderPatternPinsCleared", { count: result.clearedPins.length }));
@@ -245,7 +501,7 @@
     if (!seat || seat.type === "aisle") return;
     activePinSeatId = seatId;
     ui.setValidationAnchor(`.seat[data-seat-id="${seatId}"]`);
-    const students = engine.buildStudents(state.config);
+    const students = engine.studentsRequiringSeats(state.config);
     const usedNumbers = new Set(state.seats.filter((item) => item.id !== seatId && item.pin).map((item) => item.pin));
     const available = students.filter((student) => !usedNumbers.has(student.number) && engine.isCompatible(seat, student));
     const select = document.getElementById("pinStudentSelect");
@@ -454,7 +710,7 @@
 
     const button = document.getElementById("drawButton");
     const message = document.getElementById("drawMessage");
-    const students = engine.buildStudents(state.config).map((student) => student.number);
+    const students = engine.studentsRequiringSeats(state.config).map((student) => student.number);
     const directory = engine.parseStudentNames(state.config.studentData, engine.buildStudents(state.config));
     if (seatTimeline) seatTimeline.cancel();
     resetDrawEffects();
@@ -559,8 +815,24 @@
     document.querySelector(".control-panel").addEventListener("input", () => ui.setValidationAnchor(null), true);
     document.getElementById("pinStudentSelect").addEventListener("change", previewPin);
     document.getElementById("pinDialog").addEventListener("close", positionNotice);
-    ["classNameInput", "rowsInput", "colsInput", "maxNumberInput", "emptyNumbersInput", "femaleStartInput", "displayModeInput"].forEach((id) => {
+    ["classNameInput", "rowsInput", "colsInput", "maxNumberInput", "emptyNumbersInput", "seatExcludedNumbersInput", "femaleStartInput", "displayModeInput"].forEach((id) => {
       document.getElementById(id).addEventListener("change", updateFromInputs);
+    });
+    document.getElementById("manualNonSeatStudents").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-seat-requirement]");
+      if (!button) return;
+      const number = Number(button.dataset.seatRequirement);
+      const excluded = engine.parseEmptyNumbers(state.config.seatExcludedNumbers, state.config.maxNumber);
+      excluded.delete(number);
+      document.getElementById("seatExcludedNumbersInput").value = engine.formatNumberRanges(excluded);
+      updateFromInputs();
+    });
+    window.addEventListener("seatmaster:seatrequirement", (event) => {
+      const number = Number(event.detail && event.detail.number);
+      const excluded = engine.parseEmptyNumbers(state.config.seatExcludedNumbers, state.config.maxNumber);
+      excluded.add(number);
+      document.getElementById("seatExcludedNumbersInput").value = engine.formatNumberRanges(excluded);
+      updateFromInputs();
     });
     ["boardPositionInput", "doorPositionInput", "teacherPositionInput"].forEach((id) => {
       document.getElementById(id).addEventListener("change", updateRoomMarkersFromInputs);
@@ -575,14 +847,28 @@
     });
 
     document.getElementById("seatGrid").addEventListener("click", (event) => {
+      const tableHandle = event.target.closest("[data-table-handle]");
+      if (tableHandle && state.roomLayout) { selectedTableId = tableHandle.closest("[data-table-id]").dataset.tableId; state.roomLayout.selectedTableId = selectedTableId; return; }
+      const path = event.target.closest("[data-path-id]");
+      if (path && state.roomLayout?.editing) { selectedPathId = path.dataset.pathId; state.roomLayout.selectedPathId = selectedPathId; render({ keepInputs: true }); return; }
       const pinButton = event.target.closest("[data-action='pin']");
       if (pinButton) { event.stopPropagation(); openPinDialog(pinButton.dataset.seatId); return; }
+      const roomSeat = event.target.closest("[data-room-seat-handle]");
+      if (roomSeat && state.roomLayout?.editing) {
+        const table = roomSeat.closest("[data-table-id]");
+        selectedTableId = table.dataset.tableId;
+        state.roomLayout.selectedTableId = selectedTableId;
+        state.roomLayout.selectedSeatId = roomSeat.dataset.seatId;
+        render({ keepInputs: true });
+        return;
+      }
       const axis = event.target.closest("[data-axis]");
       if (axis) { cycleAxis(axis.dataset.axis, Number(axis.dataset.index)); return; }
       const seat = event.target.closest(".seat");
       if (seat && document.body.classList.contains("presentation-mode")) {
         openStudentProfile(seat.dataset.seatId);
       } else if (seat) {
+        if (state.roomLayout?.editing) return;
         if (adminMode === "prearrange") openPinDialog(seat.dataset.seatId);
         else if (adminMode === "manual") manual.selectSeat(seat.dataset.seatId);
         else if (adminMode === "adjust") selectAdjustmentSeat(seat.dataset.seatId);
@@ -591,14 +877,215 @@
     });
 
     document.getElementById("seatGrid").addEventListener("keydown", (event) => {
+      if (state.roomLayout?.editing && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+        const seatHandle = event.target.closest("[data-room-seat-handle]");
+        if (seatHandle) {
+          const table = state.roomLayout.tables.find((item) => item.id === seatHandle.closest("[data-table-id]").dataset.tableId);
+          const point = table?.seatPositions.find((item) => item.id === seatHandle.dataset.seatId);
+          if (!point) return;
+          recordRoomEdit();
+          const delta = event.shiftKey ? 4 : 1;
+          if (event.key === "ArrowLeft") point.x = Math.max(2, point.x - delta);
+          if (event.key === "ArrowRight") point.x = Math.min(98, point.x + delta);
+          if (event.key === "ArrowUp") point.y = Math.max(2, point.y - delta);
+          if (event.key === "ArrowDown") point.y = Math.min(98, point.y + delta);
+          state.roomLayout.selectedTableId = table.id;
+          state.roomLayout.selectedSeatId = point.id;
+          event.preventDefault(); render({ keepInputs: true }); saveSoon();
+          document.querySelector(`[data-seat-id="${point.id}"]`)?.focus({ preventScroll: true });
+          return;
+        }
+        const tableHandle = event.target.closest("[data-table-handle]");
+        const pathHandle = event.target.closest("[data-path-handle]");
+        const owner = event.target.closest(tableHandle ? "[data-table-id]" : "[data-path-id]");
+        if (tableHandle && owner) {
+          const table = state.roomLayout.tables.find((item) => item.id === owner.dataset.tableId);
+          recordRoomEdit();
+          if (event.shiftKey) table.rotation = (table.rotation + (event.key === "ArrowLeft" || event.key === "ArrowDown" ? -15 : 15) + 360) % 360;
+          else { table.x = Math.max(5, Math.min(95, table.x + (event.key === "ArrowLeft" ? -2 : event.key === "ArrowRight" ? 2 : 0))); table.y = Math.max(8, Math.min(92, table.y + (event.key === "ArrowUp" ? -2 : event.key === "ArrowDown" ? 2 : 0))); }
+          event.preventDefault(); render({ keepInputs: true }); saveSoon(); document.querySelector(`[data-table-id="${table.id}"] [data-table-handle]`)?.focus({ preventScroll: true }); return;
+        }
+        if (pathHandle && owner) {
+          const pathItem = state.roomLayout.paths.find((item) => item.id === owner.dataset.pathId);
+          recordRoomEdit();
+          pathItem.x = Math.max(0, Math.min(95, pathItem.x + (event.key === "ArrowLeft" ? -2 : event.key === "ArrowRight" ? 2 : 0)));
+          pathItem.y = Math.max(0, Math.min(95, pathItem.y + (event.key === "ArrowUp" ? -2 : event.key === "ArrowDown" ? 2 : 0)));
+          event.preventDefault(); render({ keepInputs: true }); saveSoon(); document.querySelector(`[data-path-id="${pathItem.id}"] [data-path-handle]`)?.focus({ preventScroll: true }); return;
+        }
+      }
       if ((event.key === "Enter" || event.key === " ") && event.target.classList.contains("seat")) {
         event.preventDefault();
         if (document.body.classList.contains("presentation-mode")) openStudentProfile(event.target.dataset.seatId);
+        else if (state.roomLayout?.editing) {
+          const owner = event.target.closest("[data-table-id]");
+          if (owner) { state.roomLayout.selectedTableId = owner.dataset.tableId; selectedTableId = owner.dataset.tableId; state.roomLayout.selectedSeatId = event.target.dataset.seatId; render({ keepInputs: true }); }
+        }
         else if (adminMode === "prearrange") openPinDialog(event.target.dataset.seatId);
         else if (adminMode === "manual") manual.selectSeat(event.target.dataset.seatId);
         else if (adminMode === "adjust") selectAdjustmentSeat(event.target.dataset.seatId);
         else cycleSeat(event.target.dataset.seatId);
       }
+    });
+
+    const roomCanvas = document.getElementById("seatGrid");
+    roomCanvas.addEventListener("pointerdown", (event) => {
+      if (!state.roomLayout?.editing || !event.isPrimary) return;
+      if (event.target.closest("[data-action='pin']")) return;
+      const seatHandle = event.target.closest("[data-room-seat-handle]");
+      const tableHandle = event.target.closest("[data-table-handle]");
+      const pathHandle = event.target.closest("[data-path-handle]");
+      if (!seatHandle && !tableHandle && !pathHandle) return;
+      const owner = event.target.closest(seatHandle || tableHandle ? "[data-table-id]" : "[data-path-id]");
+      const rect = roomCanvas.getBoundingClientRect();
+      const id = seatHandle ? seatHandle.dataset.seatId : tableHandle ? owner.dataset.tableId : owner.dataset.pathId;
+      selectedTableId = seatHandle || tableHandle ? owner.dataset.tableId : selectedTableId;
+      selectedPathId = pathHandle ? id : selectedPathId;
+      if (state.roomLayout) { state.roomLayout.selectedTableId = selectedTableId; state.roomLayout.selectedPathId = selectedPathId; }
+      const table = seatHandle ? state.roomLayout.tables.find((item) => item.id === owner.dataset.tableId) : null;
+      if (seatHandle) state.roomLayout.selectedSeatId = id;
+      const item = seatHandle ? table.seatPositions.find((position) => position.id === id) : tableHandle ? state.roomLayout.tables.find((item) => item.id === id) : state.roomLayout.paths.find((pathItem) => pathItem.id === id);
+      recordRoomEdit();
+      roomPointerDrag = { kind: seatHandle ? "seat" : tableHandle ? "table" : "path", id, tableId: table?.id, tableElement: table ? owner : null, rotation: table?.rotation || 0, rect, startX: event.clientX, startY: event.clientY, x: item.x, y: item.y, moved: false };
+      roomCanvas.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+    roomCanvas.addEventListener("pointermove", (event) => {
+      if (!roomPointerDrag) return;
+      const drag = roomPointerDrag;
+      if (drag.kind === "seat") {
+        const table = state.roomLayout?.tables.find((item) => item.id === drag.tableId);
+        const point = table?.seatPositions.find((item) => item.id === drag.id);
+        if (!point || !drag.tableElement) return;
+        const bounds = drag.tableElement.getBoundingClientRect();
+        const width = drag.tableElement.offsetWidth;
+        const height = drag.tableElement.offsetHeight;
+        const dx = event.clientX - (bounds.left + bounds.width / 2);
+        const dy = event.clientY - (bounds.top + bounds.height / 2);
+        const angle = -drag.rotation * Math.PI / 180;
+        const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+        const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+        point.x = Math.max(2, Math.min(98, (localX / width + 0.5) * 100));
+        point.y = Math.max(2, Math.min(98, (localY / height + 0.5) * 100));
+        drag.moved ||= Math.abs(point.x - drag.x) + Math.abs(point.y - drag.y) > 0.5;
+        const element = roomCanvas.querySelector(`[data-seat-id="${drag.id}"]`);
+        if (element) { element.style.left = `${point.x}%`; element.style.top = `${point.y}%`; }
+        return;
+      }
+      const item = drag.kind === "table" ? state.roomLayout.tables.find((table) => table.id === drag.id) : state.roomLayout.paths.find((pathItem) => pathItem.id === drag.id);
+      if (!item) return;
+      const dx = ((event.clientX - drag.startX) / drag.rect.width) * 100;
+      const dy = ((event.clientY - drag.startY) / drag.rect.height) * 100;
+      item.x = Math.max(drag.kind === "table" ? 5 : 0, Math.min(drag.kind === "table" ? 95 : 95, drag.x + dx));
+      item.y = Math.max(drag.kind === "table" ? 8 : 0, Math.min(drag.kind === "table" ? 92 : 95, drag.y + dy));
+      drag.moved ||= Math.abs(dx) + Math.abs(dy) > 0.5;
+      const element = roomCanvas.querySelector(drag.kind === "table" ? `[data-table-id="${drag.id}"]` : `[data-path-id="${drag.id}"]`);
+      if (element) { element.style.left = `${item.x}%`; element.style.top = `${item.y}%`; }
+    });
+    const finishRoomDrag = () => {
+      if (!roomPointerDrag) return;
+      roomPointerDrag = null;
+      render({ keepInputs: true }); saveSoon();
+    };
+    roomCanvas.addEventListener("pointerup", finishRoomDrag);
+    roomCanvas.addEventListener("pointercancel", finishRoomDrag);
+
+    document.querySelectorAll("[data-room-template]").forEach((button) => button.addEventListener("click", () => applyRoomTemplate(button.dataset.roomTemplate)));
+    document.getElementById("roomEditToggle").addEventListener("change", (event) => {
+      if (!state.roomLayout) return;
+      state.roomLayout.editing = event.target.checked;
+      render({ keepInputs: true }); saveSoon();
+    });
+    document.getElementById("roomRotateLeft").addEventListener("click", () => rotateSelectedTable(-15));
+    document.getElementById("roomRotateRight").addEventListener("click", () => rotateSelectedTable(15));
+    document.getElementById("roomUndoButton").addEventListener("click", undoRoomEdit);
+    document.getElementById("roomRedoButton").addEventListener("click", redoRoomEdit);
+    document.getElementById("roomTableTypeSelect").addEventListener("change", (event) => {
+      const table = state.roomLayout?.tables.find((item) => item.id === selectedTableId);
+      if (!table || !["rect", "round", "u"].includes(event.target.value)) return;
+      recordRoomEdit();
+      table.type = event.target.value;
+      table.edgeCounts = null;
+      table.seatPositions = SeatMaster.roomLayout.autoSeatPositions(table, table.seatIds);
+      render({ keepInputs: true }); saveSoon();
+    });
+    ["roomTableWidthInput", "roomTableHeightInput"].forEach((id) => document.getElementById(id).addEventListener("change", (event) => {
+      const table = state.roomLayout?.tables.find((item) => item.id === selectedTableId);
+      if (!table) return;
+      recordRoomEdit();
+      table[id === "roomTableWidthInput" ? "width" : "height"] = Math.max(18, Math.min(80, Number(event.target.value) || 18));
+      render({ keepInputs: true }); saveSoon();
+    }));
+    document.getElementById("roomDuplicateTable").addEventListener("click", duplicateSelectedTable);
+    document.getElementById("roomAddTable").addEventListener("click", addRoomTable);
+    document.getElementById("roomAddSeat").addEventListener("click", addSeatToSelectedTable);
+    document.getElementById("roomRemoveSeat").addEventListener("click", removeSeatFromSelectedTable);
+    document.getElementById("roomSeatCountInput").addEventListener("change", (event) => {
+      setSelectedTableSeatCount(event.target.value, { resetEdges: true });
+    });
+    document.getElementById("roomSeatXInput").addEventListener("change", (event) => setSelectedSeatCoordinate("x", event.target.value));
+    document.getElementById("roomSeatYInput").addEventListener("change", (event) => setSelectedSeatCoordinate("y", event.target.value));
+    document.getElementById("roomAutoArrangeSeats").addEventListener("click", autoArrangeSelectedSeats);
+    document.getElementById("roomUOpeningSelect").addEventListener("change", (event) => {
+      const table = state.roomLayout?.tables.find((item) => item.id === selectedTableId);
+      if (!table || table.type !== "u") return;
+      recordRoomEdit();
+      table.geometry ||= {};
+      table.geometry.opening = event.target.value;
+      table.edgeCounts = null;
+      table.seatPositions = SeatMaster.roomLayout.autoSeatPositions(table, table.seatIds);
+      render({ keepInputs: true }); saveSoon();
+    });
+    ["pointerdown", "focus"].forEach((eventName) => document.getElementById("roomRoundRadiusInput").addEventListener(eventName, () => startRoomRangeEdit("roundRadius")));
+    document.getElementById("roomRoundRadiusInput").addEventListener("change", () => { roomRangeEdits.delete("roundRadius"); render({ keepInputs: true }); saveSoon(); });
+    document.getElementById("roomRoundRadiusInput").addEventListener("input", (event) => {
+      const table = state.roomLayout?.tables.find((item) => item.id === selectedTableId);
+      if (!table || table.type !== "round") return;
+      table.geometry ||= {};
+      table.geometry.seatRadius = Number(event.target.value);
+      table.seatPositions = SeatMaster.roomLayout.autoSeatPositions(table, table.seatIds);
+      const points = new Map(table.seatPositions.map((position) => [position.id, position]));
+      table.seatIds.forEach((id) => { const seat = document.querySelector(`[data-seat-id="${id}"]`); const point = points.get(id); if (seat && point) { seat.style.left = `${point.x}%`; seat.style.top = `${point.y}%`; } });
+      saveSoon();
+    });
+    document.querySelectorAll("[data-room-edge]").forEach((input) => input.addEventListener("change", () => {
+      const table = state.roomLayout?.tables.find((item) => item.id === selectedTableId);
+      if (!table || table.type === "round") return;
+      recordRoomEdit();
+      const counts = Object.fromEntries(["top", "right", "bottom", "left"].map((edge) => [edge, edge === table.geometry?.opening && table.type === "u" ? 0 : Math.max(0, Math.min(60, Math.round(Number(document.querySelector(`[data-room-edge="${edge}"]`).value) || 0)))]));
+      let total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+      if (total < 1) { counts[SeatMaster.roomLayout.activeEdges(table)[0]] = 1; total = 1; }
+      if (total > 60) { table.edgeCounts = SeatMaster.roomLayout.defaultEdgeCounts(table, 60); }
+      else table.edgeCounts = counts;
+      setSelectedTableSeatCount(total, { alreadyRecorded: true, resetPositions: true });
+    }));
+    document.getElementById("roomDeleteTable").addEventListener("click", deleteSelectedTable);
+    document.getElementById("roomAddPath").addEventListener("click", addRoomPath);
+    document.getElementById("roomPathWidthInput").addEventListener("input", (event) => {
+      const pathItem = state.roomLayout?.paths.find((item) => item.id === selectedPathId);
+      if (!pathItem) return;
+      startRoomRangeEdit("pathWidth");
+      pathItem.width = Number(event.target.value);
+      const element = document.querySelector(`[data-path-id="${selectedPathId}"]`);
+      if (element) element.style.width = `${pathItem.width}%`;
+      saveSoon();
+    });
+    document.getElementById("roomPathWidthInput").addEventListener("change", () => roomRangeEdits.delete("pathWidth"));
+    document.getElementById("roomZoomInput").addEventListener("input", (event) => {
+      if (!state.roomLayout) return;
+      startRoomRangeEdit("zoom");
+      state.roomLayout.zoom = Math.max(0.6, Math.min(1.5, Number(event.target.value) / 100));
+      const canvas = document.getElementById("seatGrid");
+      canvas.style.zoom = String(state.roomLayout.zoom);
+      document.getElementById("roomZoomOutput").value = `${Math.round(state.roomLayout.zoom * 100)}%`;
+      saveSoon();
+    });
+    document.getElementById("roomZoomInput").addEventListener("change", () => { roomRangeEdits.delete("zoom"); render({ keepInputs: true }); });
+    document.getElementById("roomZoomReset").addEventListener("click", () => {
+      if (!state.roomLayout) return;
+      recordRoomEdit();
+      state.roomLayout.zoom = 1;
+      document.querySelector(".grid-scroll")?.scrollTo({ left: 0, top: 0, behavior: "smooth" });
+      render({ keepInputs: true }); saveSoon();
     });
 
     document.getElementById("pinForm").addEventListener("submit", (event) => {
@@ -630,6 +1117,11 @@
       }
     });
     document.addEventListener("keydown", (event) => {
+      if (state.roomLayout?.editing && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z" && !event.target.matches("input, textarea, select")) {
+        event.preventDefault();
+        if (event.shiftKey) redoRoomEdit(); else undoRoomEdit();
+        return;
+      }
       if (event.key === "Escape" && !document.getElementById("studentProfileOverlay").hidden) closeStudentProfile();
     });
     document.querySelectorAll("[data-admin-mode]").forEach((button) => button.addEventListener("click", () => setAdminMode(button.dataset.adminMode)));
@@ -646,6 +1138,7 @@
       if (!file) return;
       try {
         state = hydrate(await storage.readImport(file));
+        roomUndoStack = []; roomRedoStack = []; roomRangeEdits.clear();
         manual.reset();
         adminMode = state.manualDraft ? "manual" : state.adminMode;
         render();
@@ -670,6 +1163,7 @@
       if (!window.confirm(i18n.t("confirm.reset"))) return;
       storage.clear();
       state = hydrate(SeatMaster.createDefaultState());
+      roomUndoStack = []; roomRedoStack = []; roomRangeEdits.clear();
       adminMode = "layout";
       manual.reset();
       selectedAdjustmentSeatId = null;
@@ -687,6 +1181,7 @@
     ui.populateRoomPositionOptions();
     bindEvents();
     studentPicker = SeatMaster.studentDraw.init(() => state, updateSoundButton);
+    groupPlannerUi = SeatMaster.groupUI.create(() => state, saveSoon);
     render();
     storage.save(state);
   }

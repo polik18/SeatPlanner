@@ -7,7 +7,7 @@
   // Drafts are independent of the last published result. Never keep duplicates,
   // missing student numbers, removed desks, or aisle assignments after an edit.
   function normalize(state, source) {
-    const valid = new Set(engine.buildStudents(state.config).map((s) => s.number));
+    const valid = new Set(engine.studentsRequiringSeats(state.config).map((s) => s.number));
     const used = new Set();
     const assignment = {};
     state.seats.filter((s) => s.type !== "aisle").forEach((seat) => {
@@ -20,12 +20,12 @@
 
   function remaining(state, assignment) {
     const used = new Set(Object.values(assignment));
-    return engine.buildStudents(state.config).filter((s) => !used.has(s.number));
+    return engine.studentsRequiringSeats(state.config).filter((s) => !used.has(s.number));
   }
 
   function place(state, source, number, targetId) {
     const assignment = normalize(state, source);
-    if (!Object.hasOwn(assignment, targetId) || !engine.buildStudents(state.config).some((s) => s.number === number)) return assignment;
+    if (!Object.hasOwn(assignment, targetId) || !engine.studentsRequiringSeats(state.config).some((s) => s.number === number)) return assignment;
     const from = Object.keys(assignment).find((id) => assignment[id] === number);
     if (from === targetId) return assignment;
     // A seated student swaps; an unseated student sends the occupant to the tray.
@@ -126,8 +126,10 @@
       if (!active) return;
       const state = getState();
       const source = state.manualDraft || {};
-      const students = engine.buildStudents(state.config);
-      const names = engine.parseStudentNames(state.config.studentData, students);
+      const roster = engine.buildStudents(state.config);
+      const students = engine.studentsRequiringSeats(state.config);
+      const noSeatStudents = roster.filter((student) => !student.requiresSeat);
+      const names = engine.parseStudentNames(state.config.studentData, roster);
       const pending = remaining(state, source);
       const seatsByNumber = new Map(Object.entries(source).filter(([, n]) => n).map(([id, n]) => [n, id]));
       if (selected !== null && !students.some((s) => s.number === selected)) selected = null;
@@ -135,14 +137,14 @@
       $("manualProgressBar").max = students.length || 1;
       $("manualProgressBar").value = students.length - pending.length;
       $("manualCurrent").textContent = selected !== null ? t("manual.selected", { student: label(selected) }) : pending.length ? t("manual.chooseFirst") : t("manual.allPlaced");
-      $("manualFinishButton").disabled = pending.length > 0 || !students.length;
+      $("manualFinishButton").disabled = pending.length > 0 || !roster.length;
       $("manualUndoButton").disabled = !undo.length;
       $("manualRedoButton").disabled = !redo.length;
       $("manualUnseatButton").disabled = !seatsByNumber.has(selected);
       $("manualCancelSelection").disabled = selected === null;
       $("manualClearButton").disabled = !seatsByNumber.size;
       $("manualCapacity").hidden = Object.keys(source).length >= students.length;
-      $("manualCapacity").textContent = t("manual.capacity", { count: students.length - Object.keys(source).length });
+      $("manualCapacity").textContent = t("manual.capacity", { count: Math.max(0, students.length - Object.keys(source).length) });
       document.querySelectorAll("[data-manual-filter]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.manualFilter === filter)));
       const visible = students.filter((s) => matches(s.number) && (filter === "all" || !seatsByNumber.has(s.number)));
       const tray = $("manualStudents");
@@ -152,9 +154,11 @@
         const id = seatsByNumber.get(s.number);
         const name = names.get(s.number);
         const description = `${label(s.number)}${id ? ` · ${seatLabel(id)}` : ""}`;
-        return `<button type="button" class="manual-student ${selected === s.number ? "is-selected" : ""}" data-student-number="${s.number}" draggable="true" aria-pressed="${selected === s.number}" aria-label="${ui.escapeHtml(description)}" title="${ui.escapeHtml(description)}"><span class="manual-student-number">${s.number}</span>${name ? `<span class="manual-student-name">${ui.escapeHtml(name)}</span>` : ""}${id ? `<small>${ui.escapeHtml(seatLabel(id))}</small>` : ""}</button>`;
+        return `<div class="manual-student-row"><button type="button" class="manual-student ${selected === s.number ? "is-selected" : ""}" data-student-number="${s.number}" draggable="true" aria-pressed="${selected === s.number}" aria-label="${ui.escapeHtml(description)}" title="${ui.escapeHtml(description)}"><span class="manual-student-number">${s.number}</span>${name ? `<span class="manual-student-name">${ui.escapeHtml(name)}</span>` : ""}${id ? `<small>${ui.escapeHtml(seatLabel(id))}</small>` : ""}</button><button type="button" class="manual-seat-toggle" data-mark-no-seat="${s.number}" aria-label="${ui.escapeHtml(t("manual.noPhysicalSeat"))}" title="${ui.escapeHtml(t("manual.noPhysicalSeat"))}">↘</button></div>`;
       }).join("") : `<p class="manual-empty">${ui.escapeHtml(query ? t("manual.noMatches") : t("manual.nonePending"))}</p>`;
       tray.scrollTop = scroll;
+      const noSeatTray = $("manualNonSeatStudents");
+      noSeatTray.innerHTML = noSeatStudents.length ? noSeatStudents.map((student) => `<button type="button" class="manual-student no-seat-student" data-seat-requirement="${student.number}" title="${ui.escapeHtml(t("manual.requireSeat"))}"><span class="manual-student-number">${student.number}</span>${names.get(student.number) ? `<span class="manual-student-name">${ui.escapeHtml(names.get(student.number))}</span>` : ""}<small>${ui.escapeHtml(t("manual.noPhysicalSeat"))} · ${ui.escapeHtml(t("manual.requireSeat"))}</small></button>`).join("") : `<p class="manual-empty">${ui.escapeHtml(t("manual.noNonSeatStudents"))}</p>`;
       document.querySelectorAll(".seat").forEach((element) => {
         const id = element.dataset.seatId;
         const usable = Object.hasOwn(source, id);
@@ -171,6 +175,8 @@
     }
 
     $("manualStudents").addEventListener("click", (event) => {
+      const exclude = event.target.closest("[data-mark-no-seat]");
+      if (exclude) { window.dispatchEvent(new CustomEvent("seatmaster:seatrequirement", { detail: { number: Number(exclude.dataset.markNoSeat), requiresSeat: false } })); return; }
       const button = event.target.closest("[data-student-number]");
       if (!button) return;
       const number = Number(button.dataset.studentNumber);
@@ -187,7 +193,7 @@
     $("manualRedoButton").addEventListener("click", () => restore(false));
     $("manualClearButton").addEventListener("click", () => {
       if (!window.confirm(t("manual.clearConfirm"))) return;
-      commit(normalize(getState(), {}), automatic ? engine.buildStudents(getState().config)[0]?.number || null : null, t("manual.cleared"));
+      commit(normalize(getState(), {}), automatic ? engine.studentsRequiringSeats(getState().config)[0]?.number || null : null, t("manual.cleared"));
     });
     $("manualFinishButton").addEventListener("click", finish);
     document.addEventListener("keydown", (event) => {

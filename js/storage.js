@@ -13,7 +13,21 @@
       hasDrawn: Boolean(state.hasDrawn),
       resultSource: state.resultSource || "draw",
       adminMode: state.adminMode || "layout",
-      manualDraft: state.manualDraft ? { ...state.manualDraft } : null
+      manualDraft: state.manualDraft ? { ...state.manualDraft } : null,
+      activities: Array.isArray(state.activities) ? state.activities : [],
+      roomLayout: state.roomLayout || null
+    };
+  }
+
+  function migrate(parsed) {
+    if (parsed.version === VERSION) return parsed;
+    if (parsed.version !== 1 && parsed.version !== 2) return null;
+    return {
+      ...parsed,
+      version: VERSION,
+      config: { ...SeatMaster.constants.DEFAULT_CONFIG, ...parsed.config, seatExcludedNumbers: parsed.version === 1 ? "" : parsed.config.seatExcludedNumbers || "" },
+      activities: Array.isArray(parsed.activities) ? parsed.activities : [],
+      roomLayout: parsed.roomLayout || null
     };
   }
 
@@ -24,11 +38,11 @@
 
     load() {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem("classroom-seat-master:v2") || localStorage.getItem("classroom-seat-master:v1");
         if (!raw) return null;
         const parsed = JSON.parse(raw);
-        if (!parsed || parsed.version !== VERSION || !parsed.config || !Array.isArray(parsed.seats)) return null;
-        return parsed;
+        if (!parsed || !parsed.config || !Array.isArray(parsed.seats)) return null;
+        return migrate(parsed);
       } catch (_error) {
         return null;
       }
@@ -36,6 +50,8 @@
 
     clear() {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem("classroom-seat-master:v2");
+      localStorage.removeItem("classroom-seat-master:v1");
     },
 
     export(state) {
@@ -53,10 +69,12 @@
 
     async readImport(file) {
       const parsed = JSON.parse(await file.text());
-      if (!parsed || parsed.version !== VERSION || !parsed.config || !Array.isArray(parsed.seats)) {
+      if (!parsed || !parsed.config || !Array.isArray(parsed.seats)) {
         throw new Error(SeatMaster.i18n ? SeatMaster.i18n.t("storage.invalid") : "這不是有效的 Classroom Seat Master 設定檔。");
       }
-      return parsed;
+      const migrated = migrate(parsed);
+      if (!migrated) throw new Error(SeatMaster.i18n ? SeatMaster.i18n.t("storage.invalid") : "這不是有效的 Classroom Seat Master 設定檔。");
+      return migrated;
     }
   };
 })();
