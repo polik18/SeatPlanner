@@ -107,9 +107,9 @@
   function renderRoomMarkers(state) {
     document.querySelectorAll("[data-room-slot]").forEach((slot) => { slot.innerHTML = ""; });
     [
-      { key: "boardPosition", type: "board", icon: "▰", label: "room.board", lengthKey: "boardLength" },
-      { key: "doorPosition", type: "door", icon: "▯", label: "room.door", offsetKey: "doorOffset" },
-      { key: "teacherPosition", type: "teacher", icon: "◆", label: "room.teacher", offsetKey: "teacherOffset" }
+      { key: "boardPosition", type: "board", icon: "▰", label: "room.board", lengthKey: "boardLength", offsetKey: "boardOffset", sizeKey: "boardSize" },
+      { key: "doorPosition", type: "door", icon: "▯", label: "room.door", offsetKey: "doorOffset", sizeKey: "doorSize" },
+      { key: "teacherPosition", type: "teacher", icon: "◆", label: "room.teacher", offsetKey: "teacherOffset", sizeKey: "teacherSize" }
     ].forEach((marker) => {
       const position = state.config[marker.key];
       if (position === "hidden") return;
@@ -120,14 +120,20 @@
       const boardLength = 70 + length * 34;
       const boardSideLength = 58 + length * 27;
       const boardMobileLength = 52 + length * 7;
-      slot.insertAdjacentHTML("beforeend", `<span class="room-marker room-marker-${marker.type}" data-room-marker="${marker.type}" style="--marker-offset:${offset}px;--board-length:${boardLength}px;--board-side-length:${boardSideLength}px;--board-mobile-length:${boardMobileLength}px"><span class="room-marker-icon" aria-hidden="true">${marker.icon}</span><span>${escapeHtml(i18n.t(marker.label))}</span></span>`);
+      const size = marker.sizeKey ? Number(state.config[marker.sizeKey]) || 3 : 3;
+      const markerScale = 0.7 + size * 0.1;
+      slot.insertAdjacentHTML("beforeend", `<span class="room-marker room-marker-${marker.type}" data-room-marker="${marker.type}" style="--marker-offset:${offset}px;--marker-scale:${markerScale};--board-length:${boardLength}px;--board-side-length:${boardSideLength}px;--board-mobile-length:${boardMobileLength}px"><span class="room-marker-icon" aria-hidden="true">${marker.icon}</span><span>${escapeHtml(i18n.t(marker.label))}</span></span>`);
     });
   }
 
   function fillRoomControlOutputs(config) {
     document.getElementById("boardLengthOutput").textContent = `${config.boardLength} / 5`;
+    document.getElementById("boardOffsetOutput").textContent = `${config.boardOffset > 0 ? "+" : ""}${config.boardOffset} px`;
+    document.getElementById("boardSizeOutput").textContent = `${config.boardSize} / 5`;
     document.getElementById("doorOffsetOutput").textContent = `${config.doorOffset > 0 ? "+" : ""}${config.doorOffset} px`;
+    document.getElementById("doorSizeOutput").textContent = `${config.doorSize} / 5`;
     document.getElementById("teacherOffsetOutput").textContent = `${config.teacherOffset > 0 ? "+" : ""}${config.teacherOffset} px`;
+    document.getElementById("teacherSizeOutput").textContent = `${config.teacherSize} / 5`;
   }
 
   function presentationStudentContent(state, number, directory) {
@@ -177,8 +183,7 @@
       const html = [];
       let collisionCount = 0;
       (state.roomLayout.paths || []).forEach((path) => {
-        const selectable = !path.locked;
-        html.push(`<div class="room-path${path.locked ? " is-locked" : ""}${path.id === state.roomLayout.selectedPathId ? " is-selected" : ""}" ${selectable ? `data-path-id="${escapeHtml(path.id)}"` : ""} style="left:${path.x}%;top:${path.y}%;width:${path.width}%;height:${path.height}%">${escapeHtml(path.label)}${selectable && state.roomLayout.editing && !presentation ? `<button class="room-path-handle" data-path-handle="true" type="button" aria-label="${escapeHtml(i18n.t("room.movePath"))}"></button>` : ""}</div>`);
+        html.push(`<div class="room-path${path.id === state.roomLayout.selectedPathId ? " is-selected" : ""}" data-path-id="${escapeHtml(path.id)}" style="left:${path.x}%;top:${path.y}%;width:${path.width}%;height:${path.height}%">${escapeHtml(path.label)}${state.roomLayout.editing && !presentation ? `<button class="room-path-handle" data-path-handle="true" type="button" aria-label="${escapeHtml(i18n.t("room.movePath"))}"></button>` : ""}</div>`);
       });
       state.roomLayout.tables.forEach((table, index) => {
         const points = SeatMaster.roomLayout.seatPoints(table, table.seatIds.length);
@@ -213,7 +218,8 @@
           if (presentation && hasProfile) classes.push("has-profile");
           if (!presentation && adminMode === "prearrange") classes.push("prearrange-seat", seat.pin ? "is-pinned-seat" : "");
           if (!presentation && (adminMode === "adjust" || adminMode === "manual")) classes.push("admin-adjust-seat", selectedSeatId === seat.id ? "is-swap-selected" : "");
-          html.push(`<div class="${classes.filter(Boolean).join(" ")}" data-seat-id="${escapeHtml(seat.id)}" ${state.roomLayout.editing && !presentation ? 'data-room-seat-handle="true"' : ""} data-type="${presentation ? "general" : seat.type}" role="button" tabindex="${presentation && !hasProfile ? "-1" : "0"}" aria-label="${presentation ? escapeHtml(hasProfile ? i18n.t("profile.openCard") : i18n.t("room.seat")) : escapeHtml(typeLabel(seat.type))}" style="left:${point.x}%;top:${point.y}%">${seatContent(seat, state, presentation, directory, adminMode)}${presentation && hasProfile ? '<span class="profile-indicator" aria-hidden="true">＋</span>' : ""}</div>`);
+          const seatStyle = `left:${point.x}%;top:${point.y}%;${point.width ? `--seat-width:${point.width}px;` : ""}${point.height ? `--seat-height:${point.height}px;` : ""}`;
+          html.push(`<div class="${classes.filter(Boolean).join(" ")}" data-seat-id="${escapeHtml(seat.id)}" ${state.roomLayout.editing && !presentation ? 'data-room-seat-handle="true"' : ""} data-type="${presentation ? "general" : seat.type}" role="button" tabindex="${presentation && !hasProfile ? "-1" : "0"}" aria-label="${presentation ? escapeHtml(hasProfile ? i18n.t("profile.openCard") : i18n.t("room.seat")) : escapeHtml(typeLabel(seat.type))}" style="${seatStyle}">${seatContent(seat, state, presentation, directory, adminMode)}${presentation && hasProfile ? '<span class="profile-indicator" aria-hidden="true">＋</span>' : ""}</div>`);
         });
         html.push("</div>");
       });
@@ -234,32 +240,35 @@
       });
       const editToggle = document.getElementById("roomEditToggle");
       if (editToggle) editToggle.checked = Boolean(state.roomLayout.editing);
-      const pathWidth = document.getElementById("roomPathWidthInput");
       const selectedPath = state.roomLayout.paths.find((path) => path.id === state.roomLayout.selectedPathId);
-      if (pathWidth) pathWidth.value = selectedPath ? String(selectedPath.width) : "8";
+      const canManagePaths = state.roomLayout.template !== "u";
       const selectedTable = state.roomLayout.tables.find((table) => table.id === state.roomLayout.selectedTableId);
       const selectedSeat = (selectedTable?.seatPositions || []).find((position) => position.id === state.roomLayout.selectedSeatId);
       const selectedTablePanel = document.getElementById("roomSelectedTablePanel");
       const selectedSeatPanel = document.getElementById("roomSelectedSeatPanel");
+      const selectedPathPanel = document.getElementById("roomSelectedPathPanel");
       const canvasControlPanel = document.getElementById("roomCanvasControlPanel");
       if (selectedTablePanel) selectedTablePanel.hidden = !state.roomLayout.editing || !selectedTable;
       if (selectedSeatPanel) selectedSeatPanel.hidden = !state.roomLayout.editing || !selectedSeat;
+      if (selectedPathPanel) selectedPathPanel.hidden = !state.roomLayout.editing || !canManagePaths || !selectedPath;
       if (canvasControlPanel) canvasControlPanel.hidden = !state.roomLayout.editing;
       const selectionLabel = document.getElementById("roomEditorSelection");
       if (selectionLabel) selectionLabel.textContent = selectedTable ? i18n.t("room.table", { number: state.roomLayout.tables.indexOf(selectedTable) + 1 }) : i18n.t("room.noSelection");
-      ["roomAddTable", "roomAddPath", "roomZoomReset"].forEach((id) => {
+      ["roomAddTable", "roomZoomReset"].forEach((id) => {
         const button = document.getElementById(id);
         if (button) button.disabled = !state.roomLayout.editing;
       });
+      const addPath = document.getElementById("roomAddPath");
+      if (addPath) { addPath.hidden = !canManagePaths; addPath.disabled = !state.roomLayout.editing || !canManagePaths; }
       const seatCount = document.getElementById("roomSeatCountInput");
       if (seatCount) { seatCount.value = selectedTable ? String(selectedTable.seatIds.length) : "1"; seatCount.disabled = !selectedTable; }
-      ["roomSeatXInput", "roomSeatYInput"].forEach((id) => { const input = document.getElementById(id); if (input) { input.disabled = !selectedSeat; input.value = selectedSeat ? String(Math.round(selectedSeat[id === "roomSeatXInput" ? "x" : "y"] * 10) / 10) : ""; } });
+      [["roomSeatXInput", "x", 2], ["roomSeatYInput", "y", 2], ["roomSeatWidthInput", "width", 38], ["roomSeatHeightInput", "height", 30]].forEach(([id, property, fallback]) => { const input = document.getElementById(id); if (input) { input.disabled = !selectedSeat; input.value = selectedSeat ? String(Math.round((selectedSeat[property] || fallback) * 10) / 10) : ""; } });
       const shape = document.getElementById("roomTableTypeSelect");
       if (shape) { shape.value = selectedTable?.type || "rect"; shape.disabled = !selectedTable; }
-      const tableWidth = document.getElementById("roomTableWidthInput");
-      const tableHeight = document.getElementById("roomTableHeightInput");
-      if (tableWidth) { tableWidth.value = String(selectedTable?.width || 30); tableWidth.disabled = !selectedTable; }
-      if (tableHeight) { tableHeight.value = String(selectedTable?.height || 30); tableHeight.disabled = !selectedTable; }
+      [["roomTableXInput", "x", 50], ["roomTableYInput", "y", 50], ["roomTableWidthInput", "width", 30], ["roomTableHeightInput", "height", 30]].forEach(([id, property, fallback]) => { const input = document.getElementById(id); if (input) { input.value = String(selectedTable?.[property] || fallback); input.disabled = !selectedTable; } });
+      [["roomPathLabelInput", "label", ""], ["roomPathXInput", "x", 0], ["roomPathYInput", "y", 0], ["roomPathWidthInput", "width", 8], ["roomPathHeightInput", "height", 12]].forEach(([id, property, fallback]) => { const input = document.getElementById(id); if (input) { input.value = selectedPath ? String(selectedPath[property]) : String(fallback); input.disabled = !selectedPath || !canManagePaths; } });
+      const deletePath = document.getElementById("roomDeletePath");
+      if (deletePath) deletePath.disabled = !selectedPath || !canManagePaths;
       const zoom = document.getElementById("roomZoomInput");
       const zoomOutput = document.getElementById("roomZoomOutput");
       if (zoom) zoom.value = String(Math.round((state.roomLayout.zoom || 1) * 100));
@@ -363,10 +372,14 @@
       studentDataInput: "studentData",
       boardPositionInput: "boardPosition",
       boardLengthInput: "boardLength",
+      boardOffsetInput: "boardOffset",
+      boardSizeInput: "boardSize",
       doorPositionInput: "doorPosition",
       doorOffsetInput: "doorOffset",
+      doorSizeInput: "doorSize",
       teacherPositionInput: "teacherPosition",
-      teacherOffsetInput: "teacherOffset"
+      teacherOffsetInput: "teacherOffset",
+      teacherSizeInput: "teacherSize"
     };
     Object.entries(mapping).forEach(([id, key]) => { document.getElementById(id).value = state.config[key]; });
     fillRoomControlOutputs(state.config);

@@ -215,6 +215,8 @@
                 <div class="room-editor-fields">
                   <label class="room-edit-toggle"><span data-i18n="room.tableShape">選取桌型</span><select id="roomTableTypeSelect"><option value="rect" data-i18n="room.shapeRect">矩形桌</option><option value="round" data-i18n="room.shapeRound">圓桌</option><option value="u" data-i18n="room.shapeU">U 型桌</option></select></label>
                   <label class="room-edit-toggle"><span data-i18n="room.seatCount">每桌座位數</span><input id="roomSeatCountInput" type="number" min="1" max="60" value="4"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.tableX">桌組 X</span><input id="roomTableXInput" type="number" min="5" max="95" value="50"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.tableY">桌組 Y</span><input id="roomTableYInput" type="number" min="8" max="92" value="50"></label>
                   <label class="room-edit-toggle"><span data-i18n="room.tableWidth">桌寬 %</span><input id="roomTableWidthInput" type="number" min="18" max="80" value="30"></label>
                   <label class="room-edit-toggle"><span data-i18n="room.tableHeight">桌高 %</span><input id="roomTableHeightInput" type="number" min="18" max="80" value="30"></label>
                 </div>
@@ -240,10 +242,20 @@
               </section>
               <section id="roomSelectedSeatPanel" class="room-editor-card" hidden>
                 <div class="room-editor-card-heading"><strong data-i18n="room.seatSettings">選取座位</strong></div>
-                <div class="room-editor-fields"><label class="room-edit-toggle"><span data-i18n="room.seatX">選取座位 X</span><input id="roomSeatXInput" type="number" min="2" max="98" step="1" disabled></label><label class="room-edit-toggle"><span data-i18n="room.seatY">Y</span><input id="roomSeatYInput" type="number" min="2" max="98" step="1" disabled></label></div>
+                <div class="room-editor-fields"><label class="room-edit-toggle"><span data-i18n="room.seatX">選取座位 X</span><input id="roomSeatXInput" type="number" min="2" max="98" step="1" disabled></label><label class="room-edit-toggle"><span data-i18n="room.seatY">Y</span><input id="roomSeatYInput" type="number" min="2" max="98" step="1" disabled></label><label class="room-edit-toggle"><span data-i18n="room.seatWidth">椅子寬</span><input id="roomSeatWidthInput" type="number" min="24" max="80" step="1" disabled></label><label class="room-edit-toggle"><span data-i18n="room.seatHeight">椅子高</span><input id="roomSeatHeightInput" type="number" min="20" max="64" step="1" disabled></label></div>
+              </section>
+              <section id="roomSelectedPathPanel" class="room-editor-card" hidden>
+                <div class="room-editor-card-heading"><strong data-i18n="room.pathSettings">主要通道</strong><span data-i18n="room.pathSettingsHint">保留不放桌組的空間</span></div>
+                <div class="room-editor-fields">
+                  <label class="room-edit-toggle room-field-wide"><span data-i18n="room.pathName">名稱</span><input id="roomPathLabelInput" type="text" maxlength="40"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.pathX">通道 X</span><input id="roomPathXInput" type="number" min="0" max="95"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.pathY">通道 Y</span><input id="roomPathYInput" type="number" min="0" max="95"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.pathWidth">通道寬度</span><input id="roomPathWidthInput" type="number" min="3" max="40"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.pathHeight">通道高度</span><input id="roomPathHeightInput" type="number" min="3" max="40"></label>
+                </div>
+                <button id="roomDeletePath" class="button button-danger room-delete-button" type="button" data-i18n="room.deletePath">刪除這條通道</button>
               </section>
               <section id="roomCanvasControlPanel" class="room-editor-card room-canvas-controls">
-                <label class="path-width-control"><span data-i18n="room.pathWidth">通道寬度</span><input id="roomPathWidthInput" type="range" min="3" max="24" value="8"></label>
                 <label class="path-width-control"><span data-i18n="room.zoom">畫布縮放</span><input id="roomZoomInput" type="range" min="60" max="150" value="100"><output id="roomZoomOutput">100%</output></label>
               </section>
             </div>
@@ -292,6 +304,14 @@
                   <span class="range-label"><span data-i18n="admin.boardLength">黑板長度</span><output id="boardLengthOutput" for="boardLengthInput">3 / 5</output></span>
                   <input id="boardLengthInput" type="range" min="1" max="5" step="1" value="3" />
                 </label>
+                <label class="field range-field">
+                  <span class="range-label"><span data-i18n="admin.positionFineTune">位置微調</span><output id="boardOffsetOutput" for="boardOffsetInput">0 px</output></span>
+                  <input id="boardOffsetInput" type="range" min="-60" max="60" step="1" value="0" />
+                </label>
+                <label class="field range-field">
+                  <span class="range-label"><span data-i18n="admin.markerSize">標記大小</span><output id="boardSizeOutput" for="boardSizeInput">3 / 5</output></span>
+                  <input id="boardSizeInput" type="range" min="1" max="5" step="1" value="3" />
+                </label>
               </div>
               <div class="room-marker-control">
                 <label class="field">
@@ -302,6 +322,10 @@
                   <span class="range-label"><span data-i18n="admin.positionFineTune">位置微調</span><output id="doorOffsetOutput" for="doorOffsetInput">0 px</output></span>
                   <input id="doorOffsetInput" type="range" min="-60" max="60" step="1" value="0" />
                 </label>
+                <label class="field range-field">
+                  <span class="range-label"><span data-i18n="admin.markerSize">標記大小</span><output id="doorSizeOutput" for="doorSizeInput">3 / 5</output></span>
+                  <input id="doorSizeInput" type="range" min="1" max="5" step="1" value="3" />
+                </label>
               </div>
               <div class="room-marker-control">
                 <label class="field">
@@ -311,6 +335,10 @@
                 <label class="field range-field">
                   <span class="range-label"><span data-i18n="admin.positionFineTune">位置微調</span><output id="teacherOffsetOutput" for="teacherOffsetInput">0 px</output></span>
                   <input id="teacherOffsetInput" type="range" min="-60" max="60" step="1" value="0" />
+                </label>
+                <label class="field range-field">
+                  <span class="range-label"><span data-i18n="admin.markerSize">標記大小</span><output id="teacherSizeOutput" for="teacherSizeInput">3 / 5</output></span>
+                  <input id="teacherSizeInput" type="range" min="1" max="5" step="1" value="3" />
                 </label>
               </div>
             </div>

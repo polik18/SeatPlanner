@@ -55,7 +55,7 @@
         nextTableId: tables.length + 1,
         nextSeatId: next,
         tables,
-        paths: template === "islands" && tables.length > 1 ? [{ id: "path-1", x: 44, y: 5, width: 12, height: 90, label: "中央主要通道", locked: true }] : []
+        paths: template === "islands" && tables.length > 1 ? [{ id: "path-1", x: 44, y: 5, width: 12, height: 90, label: "中央主要通道", locked: false }] : []
       }
     };
   }
@@ -73,7 +73,7 @@
       height: Math.max(18, Math.min(80, Number(table.height) || 30)),
       rotation: ((Number(table.rotation) || 0) % 360 + 360) % 360,
       seatIds: table.seatIds.filter((id) => validSeats.has(id) && !used.has(id) && used.add(id)),
-      seatPositions: Array.isArray(table.seatPositions) ? table.seatPositions.filter((position) => position && typeof position.id === "string" && Number.isFinite(Number(position.x)) && Number.isFinite(Number(position.y))).map((position) => ({ id: position.id, x: clamp(Number(position.x), 2, 98), y: clamp(Number(position.y), 2, 98), angle: normalizeAngle(position.angle) })) : [],
+      seatPositions: Array.isArray(table.seatPositions) ? table.seatPositions.filter((position) => position && typeof position.id === "string" && Number.isFinite(Number(position.x)) && Number.isFinite(Number(position.y))).map((position) => ({ id: position.id, x: clamp(Number(position.x), 2, 98), y: clamp(Number(position.y), 2, 98), angle: normalizeAngle(position.angle), width: Number.isFinite(Number(position.width)) ? clamp(Number(position.width), 24, 80) : undefined, height: Number.isFinite(Number(position.height)) ? clamp(Number(position.height), 20, 64) : undefined })) : [],
       edgeCounts: normalizeEdgeCounts(table.edgeCounts),
       geometry: { opening: ["top", "right", "bottom", "left"].includes(table.geometry?.opening) ? table.geometry.opening : "bottom", seatRadius: clamp(Number(table.geometry?.seatRadius) || 44, 28, 49), startAngle: Number.isFinite(Number(table.geometry?.startAngle)) ? Number(table.geometry.startAngle) : -90, armThickness: clamp(Number(table.geometry?.armThickness) || 12, 6, 28) }
     })).filter((table) => table.seatIds.length);
@@ -96,7 +96,7 @@
       width: Math.max(3, Math.min(40, Number(path.width) || 6)),
       height: Math.max(3, Math.min(40, Number(path.height) || 20)),
       label: String(path.label || "輪椅／主要通道").slice(0, 40),
-      locked: Boolean(path.locked)
+      locked: false
     })) : [];
     const selectedTableId = tables.some((table) => table.id === layout.selectedTableId) ? layout.selectedTableId : tables[0]?.id || null;
     const selectedPathId = paths.some((path) => path.id === layout.selectedPathId) ? layout.selectedPathId : paths[0]?.id || null;

@@ -25,10 +25,14 @@
       studentData: "",
       boardPosition: "top-center",
       boardLength: 3,
+      boardOffset: 0,
+      boardSize: 3,
       doorPosition: "right-end",
       doorOffset: 0,
+      doorSize: 3,
       teacherPosition: "top-end",
-      teacherOffset: 0
+      teacherOffset: 0,
+      teacherSize: 3
     })
   });
 

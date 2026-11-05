@@ -387,10 +387,14 @@
       studentData: String(config.studentData !== undefined ? config.studentData : config.studentNames || "").slice(0, 50000),
       boardPosition: normalizeRoomPosition(config.boardPosition, "top-center"),
       boardLength: clampInteger(config.boardLength, 1, 5, 3),
+      boardOffset: clampInteger(config.boardOffset, -60, 60, 0),
+      boardSize: clampInteger(config.boardSize, 1, 5, 3),
       doorPosition: normalizeRoomPosition(config.doorPosition, "right-end"),
       doorOffset: clampInteger(config.doorOffset, -60, 60, 0),
+      doorSize: clampInteger(config.doorSize, 1, 5, 3),
       teacherPosition: normalizeRoomPosition(config.teacherPosition, "top-end"),
-      teacherOffset: clampInteger(config.teacherOffset, -60, 60, 0)
+      teacherOffset: clampInteger(config.teacherOffset, -60, 60, 0),
+      teacherSize: clampInteger(config.teacherSize, 1, 5, 3)
     };
   }
 
@@ -443,10 +447,14 @@
         cols: oldRows,
         boardPosition: rotateRoomPosition(currentConfig.boardPosition, direction, "top-center"),
         boardLength: currentConfig.boardLength,
+        boardOffset: rotateRoomOffset(currentConfig.boardOffset, currentConfig.boardPosition, direction),
+        boardSize: currentConfig.boardSize,
         doorPosition: rotateRoomPosition(currentConfig.doorPosition, direction, "right-end"),
         doorOffset: rotateRoomOffset(currentConfig.doorOffset, currentConfig.doorPosition, direction),
+        doorSize: currentConfig.doorSize,
         teacherPosition: rotateRoomPosition(currentConfig.teacherPosition, direction, "top-end"),
-        teacherOffset: rotateRoomOffset(currentConfig.teacherOffset, currentConfig.teacherPosition, direction)
+        teacherOffset: rotateRoomOffset(currentConfig.teacherOffset, currentConfig.teacherPosition, direction),
+        teacherSize: currentConfig.teacherSize
       },
       seats: rotatedSeats,
       assignment: rotatedAssignment,

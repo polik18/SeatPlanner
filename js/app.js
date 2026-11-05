@@ -77,6 +77,10 @@
     return JSON.stringify(classStateSnapshot(state)) === JSON.stringify(classStateSnapshot(demo));
   }
 
+  function hasDraftProgress(draft) {
+    return Boolean(draft) && typeof draft === "object" && Object.values(draft).some((value) => value !== null && value !== undefined);
+  }
+
   function replaceWorkspace(incoming) {
     workspace = incoming;
     state = hydrate(activeClassEntry().state);
@@ -85,7 +89,7 @@
     selectedTableId = state.roomLayout?.selectedTableId || null;
     selectedPathId = state.roomLayout?.selectedPathId || null;
     selectedAdjustmentSeatId = null;
-    adminMode = state.manualDraft ? "manual" : state.adminMode;
+    adminMode = hasDraftProgress(state.manualDraft) ? "manual" : state.adminMode;
     manual.reset();
     render();
     saveWorkspace();
@@ -104,7 +108,7 @@
     selectedTableId = state.roomLayout?.selectedTableId || null;
     selectedPathId = state.roomLayout?.selectedPathId || null;
     selectedAdjustmentSeatId = null;
-    adminMode = state.manualDraft ? "manual" : state.adminMode;
+    adminMode = hasDraftProgress(state.manualDraft) ? "manual" : state.adminMode;
     manual.reset();
     render();
     saveWorkspace();
@@ -299,10 +303,14 @@
       studentData: document.getElementById("studentDataInput").value,
       boardPosition: document.getElementById("boardPositionInput").value,
       boardLength: document.getElementById("boardLengthInput").value,
+      boardOffset: document.getElementById("boardOffsetInput").value,
+      boardSize: document.getElementById("boardSizeInput").value,
       doorPosition: document.getElementById("doorPositionInput").value,
       doorOffset: document.getElementById("doorOffsetInput").value,
+      doorSize: document.getElementById("doorSizeInput").value,
       teacherPosition: document.getElementById("teacherPositionInput").value,
-      teacherOffset: document.getElementById("teacherOffsetInput").value
+      teacherOffset: document.getElementById("teacherOffsetInput").value,
+      teacherSize: document.getElementById("teacherSizeInput").value
     });
   }
 
@@ -354,10 +362,14 @@
     const config = readConfigFromInputs();
     state.config.boardPosition = config.boardPosition;
     state.config.boardLength = config.boardLength;
+    state.config.boardOffset = config.boardOffset;
+    state.config.boardSize = config.boardSize;
     state.config.doorPosition = config.doorPosition;
     state.config.doorOffset = config.doorOffset;
+    state.config.doorSize = config.doorSize;
     state.config.teacherPosition = config.teacherPosition;
     state.config.teacherOffset = config.teacherOffset;
+    state.config.teacherSize = config.teacherSize;
     ui.fillRoomControlOutputs(state.config);
     ui.renderRoomMarkers(state);
     saveSoon();
@@ -547,7 +559,9 @@
     const position = table?.seatPositions.find((item) => item.id === state.roomLayout.selectedSeatId);
     if (!position) return;
     recordRoomEdit();
-    position[axis] = Math.max(2, Math.min(98, Number(value) || 2));
+    const min = axis === "width" ? 24 : axis === "height" ? 20 : 2;
+    const max = axis === "width" ? 80 : axis === "height" ? 64 : 98;
+    position[axis] = Math.max(min, Math.min(max, Number(value) || min));
     render({ keepInputs: true }); saveSoon();
   }
 
@@ -570,10 +584,34 @@
 
   function addRoomPath() {
     const layout = state.roomLayout;
-    if (!layout) return;
+    if (!layout || layout.template === "u") return;
     recordRoomEdit();
-    const path = { id: `path-${Date.now()}`, x: 8, y: 45, width: 8, height: 10, label: i18n.t("room.wheelchairPath") };
+    const path = { id: `path-${Date.now()}`, x: 6, y: 44, width: 20, height: 12, label: i18n.t("room.wheelchairPath") };
     layout.paths.push(path); selectedPathId = path.id; layout.selectedPathId = selectedPathId;
+    render({ keepInputs: true }); saveSoon();
+  }
+
+  function updateSelectedPath(property, value) {
+    const path = state.roomLayout?.paths.find((item) => item.id === selectedPathId);
+    if (!path) return;
+    recordRoomEdit();
+    if (property === "label") path.label = String(value || i18n.t("room.wheelchairPath")).trim().slice(0, 40) || i18n.t("room.wheelchairPath");
+    else if (property === "width" || property === "height") path[property] = Math.max(3, Math.min(40, Number(value) || 3));
+    else path[property] = Math.max(0, Math.min(95, Number(value) || 0));
+    path.x = Math.min(path.x, 100 - path.width);
+    path.y = Math.min(path.y, 100 - path.height);
+    render({ keepInputs: true }); saveSoon();
+  }
+
+  function deleteSelectedPath() {
+    const layout = state.roomLayout;
+    if (!layout) return;
+    const index = layout.paths.findIndex((item) => item.id === selectedPathId);
+    if (index < 0) return;
+    recordRoomEdit();
+    layout.paths.splice(index, 1);
+    selectedPathId = layout.paths[0]?.id || null;
+    layout.selectedPathId = selectedPathId;
     render({ keepInputs: true }); saveSoon();
   }
 
@@ -982,7 +1020,7 @@
     ["boardPositionInput", "doorPositionInput", "teacherPositionInput"].forEach((id) => {
       document.getElementById(id).addEventListener("change", updateRoomMarkersFromInputs);
     });
-    ["boardLengthInput", "doorOffsetInput", "teacherOffsetInput"].forEach((id) => {
+    ["boardLengthInput", "boardOffsetInput", "boardSizeInput", "doorOffsetInput", "doorSizeInput", "teacherOffsetInput", "teacherSizeInput"].forEach((id) => {
       document.getElementById(id).addEventListener("input", updateRoomMarkersFromInputs);
     });
     const dataInput = document.getElementById("studentDataInput");
@@ -1153,11 +1191,14 @@
       table.seatPositions = SeatMaster.roomLayout.autoSeatPositions(table, table.seatIds);
       render({ keepInputs: true }); saveSoon();
     });
-    ["roomTableWidthInput", "roomTableHeightInput"].forEach((id) => document.getElementById(id).addEventListener("change", (event) => {
+    ["roomTableXInput", "roomTableYInput", "roomTableWidthInput", "roomTableHeightInput"].forEach((id) => document.getElementById(id).addEventListener("change", (event) => {
       const table = state.roomLayout?.tables.find((item) => item.id === selectedTableId);
       if (!table) return;
       recordRoomEdit();
-      table[id === "roomTableWidthInput" ? "width" : "height"] = Math.max(18, Math.min(80, Number(event.target.value) || 18));
+      const property = id === "roomTableXInput" ? "x" : id === "roomTableYInput" ? "y" : id === "roomTableWidthInput" ? "width" : "height";
+      const min = property === "x" ? 5 : property === "y" ? 8 : 18;
+      const max = property === "x" ? 95 : property === "y" ? 92 : 80;
+      table[property] = Math.max(min, Math.min(max, Number(event.target.value) || min));
       render({ keepInputs: true }); saveSoon();
     }));
     document.getElementById("roomDuplicateTable").addEventListener("click", duplicateSelectedTable);
@@ -1167,8 +1208,9 @@
     document.getElementById("roomSeatCountInput").addEventListener("change", (event) => {
       setSelectedTableSeatCount(event.target.value, { resetEdges: true });
     });
-    document.getElementById("roomSeatXInput").addEventListener("change", (event) => setSelectedSeatCoordinate("x", event.target.value));
-    document.getElementById("roomSeatYInput").addEventListener("change", (event) => setSelectedSeatCoordinate("y", event.target.value));
+    [["roomSeatXInput", "x"], ["roomSeatYInput", "y"], ["roomSeatWidthInput", "width"], ["roomSeatHeightInput", "height"]].forEach(([id, property]) => {
+      document.getElementById(id).addEventListener("change", (event) => setSelectedSeatCoordinate(property, event.target.value));
+    });
     document.getElementById("roomAutoArrangeSeats").addEventListener("click", autoArrangeSelectedSeats);
     document.getElementById("roomUOpeningSelect").addEventListener("change", (event) => {
       const table = state.roomLayout?.tables.find((item) => item.id === selectedTableId);
@@ -1205,16 +1247,10 @@
     }));
     document.getElementById("roomDeleteTable").addEventListener("click", deleteSelectedTable);
     document.getElementById("roomAddPath").addEventListener("click", addRoomPath);
-    document.getElementById("roomPathWidthInput").addEventListener("input", (event) => {
-      const pathItem = state.roomLayout?.paths.find((item) => item.id === selectedPathId);
-      if (!pathItem) return;
-      startRoomRangeEdit("pathWidth");
-      pathItem.width = Number(event.target.value);
-      const element = document.querySelector(`[data-path-id="${selectedPathId}"]`);
-      if (element) element.style.width = `${pathItem.width}%`;
-      saveSoon();
+    [["roomPathLabelInput", "label"], ["roomPathXInput", "x"], ["roomPathYInput", "y"], ["roomPathWidthInput", "width"], ["roomPathHeightInput", "height"]].forEach(([id, property]) => {
+      document.getElementById(id).addEventListener("change", (event) => updateSelectedPath(property, event.target.value));
     });
-    document.getElementById("roomPathWidthInput").addEventListener("change", () => roomRangeEdits.delete("pathWidth"));
+    document.getElementById("roomDeletePath").addEventListener("click", deleteSelectedPath);
     document.getElementById("roomZoomInput").addEventListener("input", (event) => {
       if (!state.roomLayout) return;
       startRoomRangeEdit("zoom");

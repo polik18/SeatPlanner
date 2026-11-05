@@ -17,8 +17,12 @@ for (const template of ["islands", "round", "u"]) {
   assert.equal(new Set(made.roomLayout.tables.flatMap((table) => table.seatIds)).size, made.seats.length);
   if (template === "islands") {
     assert.equal(made.roomLayout.paths.length, 1);
-    assert.equal(made.roomLayout.paths[0].locked, true);
+    assert.equal(made.roomLayout.paths[0].locked, false);
     assert.ok(made.roomLayout.tables.every((table) => !SM.roomLayout.tableIntersectsPath(table, made.roomLayout.paths[0])));
+  }
+  if (template === "islands") {
+    made.roomLayout.tables[0].seatPositions[0].width = 52;
+    made.roomLayout.tables[0].seatPositions[0].height = 38;
   }
   const normalized = SM.roomLayout.normalize(made.roomLayout, made.seats);
   assert.deepEqual(Array.from(normalized.tables.flatMap((table) => table.seatIds)).sort(), Array.from(made.seats.map((seat) => seat.id)).sort());
@@ -44,4 +48,8 @@ restored.classes.forEach((entry, index) => {
   assert.equal(entry.state.roomLayout.template, expected);
   assert.deepEqual(Array.from(entry.state.roomLayout.tables.flatMap((table) => table.seatIds)).sort(), Array.from(entry.state.seats.map((seat) => seat.id)).sort());
 });
+const restoredIsland = restored.classes.find((entry) => entry.id === "islands").state.roomLayout;
+assert.equal(restoredIsland.paths[0].locked, false);
+assert.equal(restoredIsland.tables[0].seatPositions[0].width, 52);
+assert.equal(restoredIsland.tables[0].seatPositions[0].height, 38);
 console.log("room layout tests passed");
