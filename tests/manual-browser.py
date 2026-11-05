@@ -11,7 +11,7 @@ import threading
 from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
-KEY = 'classroom-seat-master:v3'
+KEY = 'classroom-seat-master:v4'
 ARTIFACTS = Path(tempfile.mkdtemp(prefix='seatplanner-manual-'))
 
 class Handler(SimpleHTTPRequestHandler):
@@ -33,13 +33,13 @@ def load(page, count=4, rows=2, cols=3, extra=None):
     }''', dict(count=count, rows=rows, cols=cols))
     if extra:
         extra(state)
-    page.evaluate('([key, state]) => localStorage.setItem(key, JSON.stringify(state))', [KEY, state])
+    page.evaluate('([key, state]) => localStorage.setItem(key, JSON.stringify({version: 4, activeClassId: "class-1", classes: [{id: "class-1", state}]}))', [KEY, state])
     page.reload()
     return state
 
 def stored(page):
     page.wait_for_timeout(220)
-    return page.evaluate('(key) => JSON.parse(localStorage.getItem(key))', KEY)
+    return page.evaluate('(key) => { const workspace = JSON.parse(localStorage.getItem(key)); return workspace.classes.find((entry) => entry.id === workspace.activeClassId).state; }', KEY)
 
 def seat(page, id):
     return page.locator(f'.seat[data-seat-id="{id}"]')
@@ -102,7 +102,7 @@ try:
         with page.expect_download() as event:
             page.locator('#exportButton').click()
         exported = json.loads(Path(event.value.path()).read_text())
-        assert exported['manualDraft'] == before
+        assert exported['classes'][0]['state']['manualDraft'] == before
         page.locator('#importFileInput').set_input_files({'name': 'draft.json', 'mimeType': 'application/json', 'buffer': json.dumps(exported).encode()})
         expect(page.locator('#manualPanel')).to_be_visible()
         assert stored(page)['manualDraft'] == before

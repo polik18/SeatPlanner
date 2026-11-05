@@ -134,6 +134,11 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
   box-shadow: var(--shadow);
 }
 .panel-section { padding: 20px; border-radius: var(--radius-md); }
+.class-manager { border: 1px solid #cfe2d6; background: linear-gradient(135deg, #f7fbf8, #eef7f1); }
+.class-count { align-self: flex-start; padding: 5px 8px; border-radius: 999px; color: var(--green); background: #dceee2; font-size: 11px; font-weight: 850; white-space: nowrap; }
+.class-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.class-actions .button { min-height: 36px; padding: 7px; font-size: 11px; }
+.class-manager small { display: block; margin-top: 9px; color: #60746a; font-size: 11px; line-height: 1.5; }
 .section-heading { justify-content: space-between; margin-bottom: 18px; }
 .section-number { color: #cbd4cf; font-family: Georgia, serif; font-size: 25px; font-style: italic; }
 
@@ -631,14 +636,25 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
 .room-template-tools { display: grid; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .room-template-tools > strong { color: var(--green); font-size: 12px; }
 .room-template-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
-.room-layout-toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 8px; padding: 12px; border: 1px solid #dce7e0; border-radius: 14px; background: #f8fbf9; }
+.room-layout-toolbar { display: grid; gap: 10px; padding: 12px; border: 1px solid #dce7e0; border-radius: 14px; background: #f8fbf9; }
 .room-layout-toolbar > * { min-width: 0; }
-.room-layout-toolbar > .room-edit-toggle, .room-layout-toolbar > .path-width-control { justify-content: space-between; min-height: 40px; }
-.room-layout-toolbar > .room-edit-toggle:first-child { grid-column: 1 / -1; justify-content: flex-start; padding: 9px 11px; background: #e5f0eb; }
-.room-layout-toolbar > .room-edit-toggle:first-child input { width: 18px; height: 18px; }
-.room-layout-toolbar > .button { min-height: 40px; }
-.room-layout-toolbar > #roomEdgeControls { grid-column: 1 / -1; }
-.room-template-buttons .button, .room-layout-toolbar .button { min-height: 32px; padding: 6px 9px; font-size: 10px; }
+.room-editor-intro { display: grid; gap: 6px; padding: 10px; border-radius: 10px; background: #e5f0eb; }
+.room-editor-intro .room-edit-toggle { justify-content: flex-start; padding: 0; background: transparent; font-size: 12px; }
+.room-editor-intro .room-edit-toggle input { width: 18px; height: 18px; }
+.room-editor-intro p { margin: 0; color: #587066; font-size: 11px; line-height: 1.45; }
+.room-editor-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.room-editor-actions .button { flex: 1 1 135px; min-height: 36px; padding: 7px 9px; font-size: 11px; }
+.room-editor-card { display: grid; gap: 10px; padding: 11px; border: 1px solid #dce7e0; border-radius: 11px; background: white; }
+.room-editor-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #63766c; font-size: 10px; font-weight: 750; }
+.room-editor-card-heading strong { color: var(--green); font-size: 13px; }
+.room-editor-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.room-editor-fields .room-edit-toggle { justify-content: space-between; min-height: 37px; }
+.compact-actions .button { flex-basis: 102px; }
+.room-shape-options { grid-template-columns: 1fr; }
+.room-canvas-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.room-canvas-controls .path-width-control { justify-content: space-between; min-height: 42px; }
+.room-delete-button { justify-self: start; min-height: 34px; padding: 7px 10px; font-size: 11px; }
+.room-template-buttons .button { min-height: 32px; padding: 6px 9px; font-size: 10px; }
 .room-edit-toggle, .path-width-control { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: #f0f5f2; color: #42594e; font-size: 11px; font-weight: 750; }
 .room-edit-toggle select { max-width: 110px; border: 1px solid #d3ded7; border-radius: 6px; padding: 3px 5px; background: white; }
 .path-width-control input { width: 90px; }

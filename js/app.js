@@ -4,6 +4,7 @@
   const SeatMaster = window.SeatMaster;
   const { engine, storage, ui, sound, i18n } = SeatMaster;
   let state = SeatMaster.createDefaultState();
+  let workspace = null;
   let activePinSeatId = null;
   let saveTimer = null;
   let seatTimeline = null;
@@ -19,6 +20,116 @@
   let roomUndoStack = [];
   let roomRedoStack = [];
   const roomRangeEdits = new Set();
+
+  function makeClassId() {
+    const used = new Set((workspace?.classes || []).map((entry) => entry.id));
+    let suffix = 1;
+    while (used.has(`class-${suffix}`)) suffix += 1;
+    return `class-${suffix}`;
+  }
+
+  function activeClassEntry() {
+    return workspace?.classes.find((entry) => entry.id === workspace.activeClassId) || workspace?.classes[0] || null;
+  }
+
+  function syncActiveClass() {
+    const entry = activeClassEntry();
+    if (entry) entry.state = state;
+  }
+
+  function saveWorkspace() {
+    syncActiveClass();
+    storage.save(workspace);
+  }
+
+  function renderClassManager() {
+    const select = document.getElementById("classSelector");
+    if (!select || !workspace) return;
+    const selected = workspace.activeClassId;
+    select.innerHTML = "";
+    workspace.classes.forEach((entry, index) => {
+      const option = document.createElement("option");
+      option.value = entry.id;
+      option.textContent = entry.state.config.className || i18n.t("common.untitled");
+      option.selected = entry.id === selected;
+      select.appendChild(option);
+    });
+    document.getElementById("classCount").textContent = i18n.t("classes.count", { count: workspace.classes.length });
+    document.getElementById("deleteClassButton").disabled = workspace.classes.length <= 1;
+  }
+
+  function switchClass(id) {
+    if (!workspace || id === workspace.activeClassId || !workspace.classes.some((entry) => entry.id === id)) return;
+    closeStudentProfile();
+    if (seatTimeline) seatTimeline.cancel();
+    document.body.classList.remove("drawing-mode", "presentation-mode");
+    syncActiveClass();
+    workspace.activeClassId = id;
+    state = hydrate(activeClassEntry().state);
+    activeClassEntry().state = state;
+    roomUndoStack = []; roomRedoStack = []; roomRangeEdits.clear();
+    selectedTableId = state.roomLayout?.selectedTableId || null;
+    selectedPathId = state.roomLayout?.selectedPathId || null;
+    selectedAdjustmentSeatId = null;
+    adminMode = state.manualDraft ? "manual" : state.adminMode;
+    manual.reset();
+    render();
+    saveWorkspace();
+  }
+
+  function addClass(copyCurrent = false) {
+    const source = copyCurrent ? JSON.parse(JSON.stringify(state)) : SeatMaster.createDefaultState();
+    const number = workspace.classes.length + 1;
+    source.config = { ...source.config, className: copyCurrent ? `${source.config.className || i18n.t("common.untitled")} ${i18n.t("classes.copySuffix")}` : i18n.t("classes.newName", { number }) };
+    const entry = { id: makeClassId(), state: hydrate(source) };
+    workspace.classes.push(entry);
+    syncActiveClass();
+    workspace.activeClassId = entry.id;
+    state = entry.state;
+    roomUndoStack = []; roomRedoStack = []; roomRangeEdits.clear();
+    selectedTableId = state.roomLayout?.selectedTableId || null;
+    selectedPathId = state.roomLayout?.selectedPathId || null;
+    selectedAdjustmentSeatId = null;
+    adminMode = "layout";
+    manual.reset();
+    render();
+    saveWorkspace();
+  }
+
+  function deleteActiveClass() {
+    if (!workspace || workspace.classes.length <= 1) return;
+    const entry = activeClassEntry();
+    if (!window.confirm(i18n.t("confirm.deleteClass", { className: entry.state.config.className || i18n.t("common.untitled") }))) return;
+    const index = workspace.classes.findIndex((item) => item.id === entry.id);
+    workspace.classes.splice(index, 1);
+    workspace.activeClassId = workspace.classes[Math.max(0, index - 1)].id;
+    state = hydrate(activeClassEntry().state);
+    activeClassEntry().state = state;
+    roomUndoStack = []; roomRedoStack = []; roomRangeEdits.clear();
+    selectedTableId = state.roomLayout?.selectedTableId || null;
+    selectedPathId = state.roomLayout?.selectedPathId || null;
+    selectedAdjustmentSeatId = null;
+    adminMode = state.adminMode;
+    manual.reset();
+    render();
+    saveWorkspace();
+  }
+
+  function importClasses(incoming) {
+    if (!incoming?.classes?.length) return;
+    syncActiveClass();
+    const used = new Set(workspace.classes.map((entry) => entry.id));
+    let suffix = 1;
+    const imported = incoming.classes.map((entry) => {
+      while (used.has(`class-${suffix}`)) suffix += 1;
+      const id = `class-${suffix}`;
+      used.add(id);
+      suffix += 1;
+      return { id, state: hydrate(entry.state) };
+    });
+    workspace.classes.push(...imported);
+    switchClass(imported[0].id);
+  }
 
   function roomEditSnapshot() {
     return JSON.parse(JSON.stringify({ roomLayout: state.roomLayout, seats: state.seats, assignment: state.assignment, hasDrawn: state.hasDrawn, manualDraft: state.manualDraft || null }));
@@ -93,7 +204,7 @@
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => {
       saveTimer = null;
-      storage.save(state);
+      saveWorkspace();
       ui.setSaveStatus(i18n.t("common.saved"));
     }, 180);
   }
@@ -102,6 +213,7 @@
     const focusedSeat = document.activeElement.closest(".seat")?.dataset.seatId;
     const presentation = document.body.classList.contains("presentation-mode");
     if (!options || !options.keepInputs) ui.fillInputs(state);
+    renderClassManager();
     const manualActive = adminMode === "manual" && !presentation;
     if (manualActive && !state.manualDraft) manual.start();
     ui.renderSummary(manualActive ? { ...state, seats: state.seats.map((s) => ({ ...s, pin: null, type: s.type === "aisle" ? "aisle" : "general" })) } : state);
@@ -138,7 +250,7 @@
     const pinCount = state.seats.filter((seat) => seat.pin).length;
     document.getElementById("prearrangeCount").hidden = adminMode === "manual";
     document.getElementById("prearrangeCount").textContent = adminMode === "adjust" && !state.hasDrawn ? i18n.t("mode.adjustUnavailable") : i18n.t("mode.prearrangeCount", { count: pinCount });
-    document.getElementById("presentationButton").textContent = i18n.t(state.hasDrawn ? "common.returnResult" : "common.presentation");
+    document.getElementById("presentationButton").textContent = i18n.t("common.startPresentation");
   }
 
   function readConfigFromInputs() {
@@ -809,7 +921,7 @@
       window.visualViewport.addEventListener("scroll", positionNotice);
     }
     window.addEventListener("pagehide", () => {
-      if (saveTimer !== null) { window.clearTimeout(saveTimer); saveTimer = null; storage.save(state); }
+      if (saveTimer !== null) { window.clearTimeout(saveTimer); saveTimer = null; saveWorkspace(); }
     });
     document.getElementById("validationToggle").addEventListener("click", ui.toggleValidationNotice);
     document.querySelector(".control-panel").addEventListener("input", () => ui.setValidationAnchor(null), true);
@@ -1131,18 +1243,17 @@
     document.getElementById("soundButton").addEventListener("click", () => { sound.toggle(); updateSoundButton(); });
     document.getElementById("fullscreenButton").addEventListener("click", toggleFullscreen);
     document.getElementById("presentationFullscreenButton").addEventListener("click", toggleFullscreen);
-    document.getElementById("exportButton").addEventListener("click", () => { storage.export(state); ui.showToast(i18n.t("toast.exported")); });
+    document.getElementById("classSelector").addEventListener("change", (event) => switchClass(event.target.value));
+    document.getElementById("addClassButton").addEventListener("click", () => addClass(false));
+    document.getElementById("duplicateClassButton").addEventListener("click", () => addClass(true));
+    document.getElementById("deleteClassButton").addEventListener("click", deleteActiveClass);
+    document.getElementById("exportButton").addEventListener("click", () => { saveWorkspace(); storage.export(workspace); ui.showToast(i18n.t("toast.exported")); });
     document.getElementById("importButton").addEventListener("click", () => document.getElementById("importFileInput").click());
     document.getElementById("importFileInput").addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
       try {
-        state = hydrate(await storage.readImport(file));
-        roomUndoStack = []; roomRedoStack = []; roomRangeEdits.clear();
-        manual.reset();
-        adminMode = state.manualDraft ? "manual" : state.adminMode;
-        render();
-        storage.save(state);
+        importClasses(await storage.readImport(file));
         ui.showToast(i18n.t("toast.imported"));
       } catch (error) {
         ui.showToast(error.message || i18n.t("toast.importFailed"), "error");
@@ -1162,19 +1273,22 @@
     document.getElementById("resetButton").addEventListener("click", () => {
       if (!window.confirm(i18n.t("confirm.reset"))) return;
       storage.clear();
-      state = hydrate(SeatMaster.createDefaultState());
+      workspace = { version: SeatMaster.constants.VERSION, activeClassId: "class-1", classes: [{ id: "class-1", state: hydrate(SeatMaster.createDefaultState()) }] };
+      state = workspace.classes[0].state;
       roomUndoStack = []; roomRedoStack = []; roomRangeEdits.clear();
       adminMode = "layout";
       manual.reset();
       selectedAdjustmentSeatId = null;
-      storage.save(state);
+      saveWorkspace();
       render();
       ui.showToast(i18n.t("toast.reset"));
     });
   }
 
   function init() {
-    state = hydrate(storage.load() || SeatMaster.createDefaultState());
+    workspace = storage.load() || { version: SeatMaster.constants.VERSION, activeClassId: "class-1", classes: [{ id: "class-1", state: SeatMaster.createDefaultState() }] };
+    state = hydrate(activeClassEntry().state);
+    activeClassEntry().state = state;
     manual = SeatMaster.manualSeating.createController(() => state, (persist = true) => { render({ keepInputs: true }); if (persist) saveSoon(); }, finishManual);
     adminMode = state.adminMode;
     i18n.apply();
@@ -1183,7 +1297,7 @@
     studentPicker = SeatMaster.studentDraw.init(() => state, updateSoundButton);
     groupPlannerUi = SeatMaster.groupUI.create(() => state, saveSoon);
     render();
-    storage.save(state);
+    saveWorkspace();
   }
 
   init();

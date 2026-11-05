@@ -73,20 +73,35 @@ const localValues = new Map();
 context.localStorage = { setItem(key, value) { serialized = value; localValues.set(key, value); }, getItem(key) { return localValues.get(key) || null; }, removeItem(key) { localValues.delete(key); } };
 vm.runInContext(fs.readFileSync(path.join(__dirname, "../js/storage.js"), "utf8"), context);
 context.window.SeatMaster.storage.save({ ...state, manualDraft: reconciled, hasDrawn: false });
-assert.deepEqual(JSON.parse(serialized).manualDraft, plain(reconciled));
-assert.deepEqual(JSON.parse(serialized).assignment, {});
+assert.deepEqual(JSON.parse(serialized).classes[0].state.manualDraft, plain(reconciled));
+assert.deepEqual(JSON.parse(serialized).classes[0].state.assignment, {});
 context.window.SeatMaster.storage.save({ ...state, manualDraft: null, assignment: draft, hasDrawn: true, resultSource: "manual" });
-assert.equal(JSON.parse(serialized).resultSource, "manual");
-assert.deepEqual(JSON.parse(serialized).assignment, plain(draft));
+assert.equal(JSON.parse(serialized).classes[0].state.resultSource, "manual");
+assert.deepEqual(JSON.parse(serialized).classes[0].state.assignment, plain(draft));
 context.window.SeatMaster.storage.save({ ...state, activities: [{ id: "task-1" }], roomLayout: { version: 1, template: "u", tables: [], paths: [] } });
-assert.equal(JSON.parse(serialized).version, 3);
-assert.equal(JSON.parse(serialized).activities[0].id, "task-1");
-assert.equal(JSON.parse(serialized).roomLayout.template, "u");
+assert.equal(JSON.parse(serialized).version, 4);
+assert.equal(JSON.parse(serialized).classes[0].state.activities[0].id, "task-1");
+assert.equal(JSON.parse(serialized).classes[0].state.roomLayout.template, "u");
 localValues.set("classroom-seat-master:v1", JSON.stringify({ version: 1, config: { maxNumber: 5 }, seats: [], hasDrawn: false }));
 localValues.delete(context.window.SeatMaster.constants.STORAGE_KEY);
 const migrated = context.window.SeatMaster.storage.load();
-assert.equal(migrated.version, 3);
-assert.equal(migrated.config.seatExcludedNumbers, "");
-assert.deepEqual(Array.from(migrated.activities), []);
-assert.equal(migrated.roomLayout, null);
+assert.equal(migrated.version, 4);
+assert.equal(migrated.classes.length, 1);
+assert.equal(migrated.classes[0].state.config.seatExcludedNumbers, "");
+assert.deepEqual(Array.from(migrated.classes[0].state.activities), []);
+assert.equal(migrated.classes[0].state.roomLayout, null);
+
+const twoClasses = {
+  version: 4,
+  activeClassId: "second",
+  classes: [
+    { id: "first", state: { version: 3, config: { className: "甲班" }, seats: [], hasDrawn: false } },
+    { id: "second", state: { version: 3, config: { className: "乙班" }, seats: [], hasDrawn: false } }
+  ]
+};
+localValues.set(context.window.SeatMaster.constants.STORAGE_KEY, JSON.stringify(twoClasses));
+const multi = context.window.SeatMaster.storage.load();
+assert.equal(multi.classes.length, 2);
+assert.equal(multi.activeClassId, "second");
+assert.equal(multi.classes[1].state.config.className, "乙班");
 console.log("manual seating tests passed");

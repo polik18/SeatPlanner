@@ -237,6 +237,18 @@
       if (pathWidth) pathWidth.value = selectedPath ? String(selectedPath.width) : "8";
       const selectedTable = state.roomLayout.tables.find((table) => table.id === state.roomLayout.selectedTableId);
       const selectedSeat = (selectedTable?.seatPositions || []).find((position) => position.id === state.roomLayout.selectedSeatId);
+      const selectedTablePanel = document.getElementById("roomSelectedTablePanel");
+      const selectedSeatPanel = document.getElementById("roomSelectedSeatPanel");
+      const canvasControlPanel = document.getElementById("roomCanvasControlPanel");
+      if (selectedTablePanel) selectedTablePanel.hidden = !state.roomLayout.editing || !selectedTable;
+      if (selectedSeatPanel) selectedSeatPanel.hidden = !state.roomLayout.editing || !selectedSeat;
+      if (canvasControlPanel) canvasControlPanel.hidden = !state.roomLayout.editing;
+      const selectionLabel = document.getElementById("roomEditorSelection");
+      if (selectionLabel) selectionLabel.textContent = selectedTable ? i18n.t("room.table", { number: state.roomLayout.tables.indexOf(selectedTable) + 1 }) : i18n.t("room.noSelection");
+      ["roomAddTable", "roomAddPath", "roomZoomReset"].forEach((id) => {
+        const button = document.getElementById(id);
+        if (button) button.disabled = !state.roomLayout.editing;
+      });
       const seatCount = document.getElementById("roomSeatCountInput");
       if (seatCount) { seatCount.value = selectedTable ? String(selectedTable.seatIds.length) : "1"; seatCount.disabled = !selectedTable; }
       ["roomSeatXInput", "roomSeatYInput"].forEach((id) => { const input = document.getElementById(id); if (input) { input.disabled = !selectedSeat; input.value = selectedSeat ? String(Math.round(selectedSeat[id === "roomSeatXInput" ? "x" : "y"] * 10) / 10) : ""; } });

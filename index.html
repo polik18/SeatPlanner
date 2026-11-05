@@ -28,7 +28,7 @@
         <button class="button button-secondary student-draw-open" type="button" data-i18n="picker.title">抽學生</button>
         <button class="button button-secondary" id="groupPlannerOpen" type="button" data-i18n="groups.open">任務分組</button>
         <button class="button button-secondary" id="manualStartButton" type="button" data-i18n="mode.manual">全手動排位</button>
-        <button class="button button-primary" id="presentationButton" type="button" data-i18n="common.presentation">進入展示模式</button>
+        <button class="button button-primary" id="presentationButton" type="button" data-i18n="common.startPresentation">點此開始展示</button>
       </div>
       <div class="header-actions presentation-only">
         <button class="button button-secondary student-draw-open" type="button" data-i18n="picker.title">抽學生</button>
@@ -46,7 +46,7 @@
           </button>
         </div>
         <button class="button button-secondary" id="presentationFullscreenButton" type="button" data-i18n="common.fullscreen">全螢幕</button>
-        <button class="button button-quiet" id="adminButton" type="button" data-i18n="common.exitPresentation">結束展示</button>
+        <button class="button button-quiet" id="adminButton" type="button" data-i18n="common.returnAdmin">返回維護後台</button>
       </div>
     </header>
 
@@ -80,6 +80,25 @@
         </div>
       </aside>
       <aside class="control-panel admin-only" aria-label="座位設定">
+        <section class="panel-section class-manager" aria-labelledby="classManagerTitle">
+          <div class="section-heading">
+            <div>
+              <p class="step-label" data-i18n="classes.eyebrow">班級管理</p>
+              <h2 id="classManagerTitle" data-i18n="classes.title">目前班級</h2>
+            </div>
+            <span id="classCount" class="class-count">1 個班級</span>
+          </div>
+          <label class="field field-wide">
+            <span data-i18n="classes.choose">切換目前呈現的班級</span>
+            <select id="classSelector" aria-label="切換目前呈現的班級"></select>
+          </label>
+          <div class="class-actions">
+            <button class="button button-primary" id="addClassButton" type="button" data-i18n="classes.add">新增班級</button>
+            <button class="button button-secondary" id="duplicateClassButton" type="button" data-i18n="classes.duplicate">複製目前班級</button>
+            <button class="button button-quiet" id="deleteClassButton" type="button" data-i18n="classes.delete">刪除目前班級</button>
+          </div>
+          <small data-i18n="classes.help">每個班級各自保留名單、版型與抽籤結果；匯出會包含全部班級。</small>
+        </section>
         <section class="panel-section">
           <div class="section-heading">
             <div>
@@ -183,33 +202,51 @@
               <button class="button button-secondary" id="roomRedoButton" type="button" data-i18n="room.redo" disabled>重做桌位編輯</button>
             </div>
             <div id="roomLayoutToolbar" class="room-layout-toolbar" hidden>
-              <label class="room-edit-toggle"><input id="roomEditToggle" type="checkbox"><span data-i18n="room.editLayout">編輯桌組與動線</span></label>
-              <label class="room-edit-toggle"><span data-i18n="room.tableShape">選取桌型</span><select id="roomTableTypeSelect"><option value="rect" data-i18n="room.shapeRect">矩形桌</option><option value="round" data-i18n="room.shapeRound">圓桌</option><option value="u" data-i18n="room.shapeU">U 型桌</option></select></label>
-              <label class="room-edit-toggle"><span data-i18n="room.tableWidth">桌寬 %</span><input id="roomTableWidthInput" type="number" min="18" max="80" value="30"></label>
-              <label class="room-edit-toggle"><span data-i18n="room.tableHeight">桌高 %</span><input id="roomTableHeightInput" type="number" min="18" max="80" value="30"></label>
-              <button id="roomRotateLeft" class="button button-secondary" type="button" data-i18n="room.rotateLeft">左轉 15°</button>
-              <button id="roomRotateRight" class="button button-secondary" type="button" data-i18n="room.rotateRight">右轉 15°</button>
-              <button id="roomDuplicateTable" class="button button-secondary" type="button" data-i18n="room.duplicate">複製桌組</button>
-              <button id="roomAddTable" class="button button-secondary" type="button" data-i18n="room.addTable">新增 4 人桌</button>
-              <button id="roomAddSeat" class="button button-secondary" type="button" data-i18n="room.addSeat">為選取桌加座位</button>
-              <button id="roomRemoveSeat" class="button button-secondary" type="button" data-i18n="room.removeSeat">移除選取桌末位</button>
-              <label class="room-edit-toggle"><span data-i18n="room.seatCount">每桌座位數</span><input id="roomSeatCountInput" type="number" min="1" max="60" value="4"></label>
-              <label class="room-edit-toggle"><span data-i18n="room.seatX">選取座位 X</span><input id="roomSeatXInput" type="number" min="2" max="98" step="1" disabled></label>
-              <label class="room-edit-toggle"><span data-i18n="room.seatY">Y</span><input id="roomSeatYInput" type="number" min="2" max="98" step="1" disabled></label>
-              <button id="roomAutoArrangeSeats" class="button button-secondary" type="button" data-i18n="room.autoArrangeSeats">自動排列此桌座位</button>
-              <label class="room-edit-toggle" id="roomUOpeningControl"><span data-i18n="room.opening">U 型開口</span><select id="roomUOpeningSelect"><option value="bottom" data-i18n="room.openBottom">朝下</option><option value="top" data-i18n="room.openTop">朝上</option><option value="left" data-i18n="room.openLeft">朝左</option><option value="right" data-i18n="room.openRight">朝右</option></select></label>
-              <label class="room-edit-toggle" id="roomRoundRadiusControl"><span data-i18n="room.roundRadius">圓桌座位半徑</span><input id="roomRoundRadiusInput" type="range" min="28" max="49" value="44"></label>
-              <div id="roomEdgeControls" class="room-edge-controls">
-                <label><span data-i18n="room.edgeTop">上邊</span><input id="roomEdgeTopInput" data-room-edge="top" type="number" min="0" max="60"></label>
-                <label><span data-i18n="room.edgeRight">右邊</span><input id="roomEdgeRightInput" data-room-edge="right" type="number" min="0" max="60"></label>
-                <label><span data-i18n="room.edgeBottom">下邊</span><input id="roomEdgeBottomInput" data-room-edge="bottom" type="number" min="0" max="60"></label>
-                <label><span data-i18n="room.edgeLeft">左邊</span><input id="roomEdgeLeftInput" data-room-edge="left" type="number" min="0" max="60"></label>
+              <div class="room-editor-intro">
+                <label class="room-edit-toggle"><input id="roomEditToggle" type="checkbox"><span data-i18n="room.editLayout">編輯桌組與動線</span></label>
+                <p data-i18n="room.editorHelp">開啟後，點選畫布中的桌組、座位或通道，再在下方調整；也可直接拖曳。</p>
               </div>
-              <button id="roomDeleteTable" class="button button-secondary" type="button" data-i18n="room.delete">刪除選取桌</button>
-              <button id="roomAddPath" class="button button-secondary" type="button" data-i18n="room.addPath">新增輪椅／主要通道</button>
-              <label class="path-width-control"><span data-i18n="room.pathWidth">通道寬度</span><input id="roomPathWidthInput" type="range" min="3" max="24" value="8"></label>
-              <label class="path-width-control"><span data-i18n="room.zoom">畫布縮放</span><input id="roomZoomInput" type="range" min="60" max="150" value="100"><output id="roomZoomOutput">100%</output></label>
-              <button id="roomZoomReset" class="button button-secondary" type="button" data-i18n="room.zoomReset">重設視圖</button>
+              <div class="room-editor-actions">
+                <button id="roomAddTable" class="button button-primary" type="button" data-i18n="room.addTable">新增 4 人桌</button>
+                <button id="roomAddPath" class="button button-secondary" type="button" data-i18n="room.addPath">新增輪椅／主要通道</button>
+                <button id="roomZoomReset" class="button button-secondary" type="button" data-i18n="room.zoomReset">重設視圖</button>
+              </div>
+              <section id="roomSelectedTablePanel" class="room-editor-card">
+                <div class="room-editor-card-heading"><strong id="roomEditorSelection" data-i18n="room.noSelection">請先點選一張桌組</strong><span data-i18n="room.tableSettings">桌組設定</span></div>
+                <div class="room-editor-fields">
+                  <label class="room-edit-toggle"><span data-i18n="room.tableShape">選取桌型</span><select id="roomTableTypeSelect"><option value="rect" data-i18n="room.shapeRect">矩形桌</option><option value="round" data-i18n="room.shapeRound">圓桌</option><option value="u" data-i18n="room.shapeU">U 型桌</option></select></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.seatCount">每桌座位數</span><input id="roomSeatCountInput" type="number" min="1" max="60" value="4"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.tableWidth">桌寬 %</span><input id="roomTableWidthInput" type="number" min="18" max="80" value="30"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.tableHeight">桌高 %</span><input id="roomTableHeightInput" type="number" min="18" max="80" value="30"></label>
+                </div>
+                <div class="room-editor-actions compact-actions">
+                  <button id="roomAddSeat" class="button button-secondary" type="button" data-i18n="room.addSeat">為選取桌加座位</button>
+                  <button id="roomRemoveSeat" class="button button-secondary" type="button" data-i18n="room.removeSeat">移除選取桌末位</button>
+                  <button id="roomAutoArrangeSeats" class="button button-secondary" type="button" data-i18n="room.autoArrangeSeats">自動排列此桌座位</button>
+                  <button id="roomRotateLeft" class="button button-secondary" type="button" data-i18n="room.rotateLeft">左轉 15°</button>
+                  <button id="roomRotateRight" class="button button-secondary" type="button" data-i18n="room.rotateRight">右轉 15°</button>
+                  <button id="roomDuplicateTable" class="button button-secondary" type="button" data-i18n="room.duplicate">複製桌組</button>
+                </div>
+                <div class="room-editor-fields room-shape-options">
+                  <label class="room-edit-toggle" id="roomUOpeningControl"><span data-i18n="room.opening">U 型開口</span><select id="roomUOpeningSelect"><option value="bottom" data-i18n="room.openBottom">朝下</option><option value="top" data-i18n="room.openTop">朝上</option><option value="left" data-i18n="room.openLeft">朝左</option><option value="right" data-i18n="room.openRight">朝右</option></select></label>
+                  <label class="room-edit-toggle" id="roomRoundRadiusControl"><span data-i18n="room.roundRadius">圓桌座位半徑</span><input id="roomRoundRadiusInput" type="range" min="28" max="49" value="44"></label>
+                </div>
+                <div id="roomEdgeControls" class="room-edge-controls">
+                  <label><span data-i18n="room.edgeTop">上邊</span><input id="roomEdgeTopInput" data-room-edge="top" type="number" min="0" max="60"></label>
+                  <label><span data-i18n="room.edgeRight">右邊</span><input id="roomEdgeRightInput" data-room-edge="right" type="number" min="0" max="60"></label>
+                  <label><span data-i18n="room.edgeBottom">下邊</span><input id="roomEdgeBottomInput" data-room-edge="bottom" type="number" min="0" max="60"></label>
+                  <label><span data-i18n="room.edgeLeft">左邊</span><input id="roomEdgeLeftInput" data-room-edge="left" type="number" min="0" max="60"></label>
+                </div>
+                <button id="roomDeleteTable" class="button button-danger room-delete-button" type="button" data-i18n="room.delete">刪除選取桌</button>
+              </section>
+              <section id="roomSelectedSeatPanel" class="room-editor-card" hidden>
+                <div class="room-editor-card-heading"><strong data-i18n="room.seatSettings">選取座位</strong></div>
+                <div class="room-editor-fields"><label class="room-edit-toggle"><span data-i18n="room.seatX">選取座位 X</span><input id="roomSeatXInput" type="number" min="2" max="98" step="1" disabled></label><label class="room-edit-toggle"><span data-i18n="room.seatY">Y</span><input id="roomSeatYInput" type="number" min="2" max="98" step="1" disabled></label></div>
+              </section>
+              <section id="roomCanvasControlPanel" class="room-editor-card room-canvas-controls">
+                <label class="path-width-control"><span data-i18n="room.pathWidth">通道寬度</span><input id="roomPathWidthInput" type="range" min="3" max="24" value="8"></label>
+                <label class="path-width-control"><span data-i18n="room.zoom">畫布縮放</span><input id="roomZoomInput" type="range" min="60" max="150" value="100"><output id="roomZoomOutput">100%</output></label>
+              </section>
             </div>
             <p id="roomGeometryStatus" class="room-geometry-status" role="status"></p>
             <small class="room-geometry-help" data-i18n="room.geometryHelp">調整桌型、開口、各邊座位數或自動排列，會重排該桌座位；手動位置可用復原還原。</small>

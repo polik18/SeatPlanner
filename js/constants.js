@@ -4,8 +4,8 @@
   const SeatMaster = (window.SeatMaster = window.SeatMaster || {});
 
   SeatMaster.constants = Object.freeze({
-    STORAGE_KEY: "classroom-seat-master:v3",
-    VERSION: 3,
+    STORAGE_KEY: "classroom-seat-master:v4",
+    VERSION: 4,
     SEAT_TYPES: ["general", "male", "female", "aisle"],
     TYPE_LABELS: Object.freeze({
       general: "不限性別",

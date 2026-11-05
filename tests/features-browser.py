@@ -8,7 +8,10 @@ import threading
 from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
-KEY = "classroom-seat-master:v3"
+KEY = "classroom-seat-master:v4"
+
+def active_state(page):
+    return page.evaluate("(key) => { const workspace = JSON.parse(localStorage.getItem(key)); return workspace.classes.find((entry) => entry.id === workspace.activeClassId).state; }", KEY)
 
 class Handler(SimpleHTTPRequestHandler):
     def log_message(self, *args):
@@ -31,25 +34,26 @@ try:
         expect(page.locator("#manualNonSeatStudents")).to_contain_text("2")
         expect(page.locator("#manualNonSeatStudents")).to_contain_text("5")
         page.wait_for_timeout(250)
-        assert page.evaluate("(key) => Array.from(SeatMaster.engine.parseEmptyNumbers(JSON.parse(localStorage.getItem(key)).config.seatExcludedNumbers, 12))", KEY) == [2, 5]
+        assert page.evaluate("(key) => { const workspace = JSON.parse(localStorage.getItem(key)); const state = workspace.classes.find((entry) => entry.id === workspace.activeClassId).state; return Array.from(SeatMaster.engine.parseEmptyNumbers(state.config.seatExcludedNumbers, 12)); }", KEY) == [2, 5]
         page.locator("[data-go-home]").first.click()
 
         page.locator('[data-room-template="round"]').click()
         page.wait_for_timeout(250)
-        assert page.evaluate("(key) => JSON.parse(localStorage.getItem(key)).roomLayout.template", KEY) == "round"
+        assert active_state(page)["roomLayout"]["template"] == "round"
         page.locator("#roomEditToggle").check()
         page.locator("#roomRotateRight").click()
         page.wait_for_timeout(250)
-        assert page.evaluate("(key) => JSON.parse(localStorage.getItem(key)).roomLayout.tables[0].rotation", KEY) == 15
+        assert active_state(page)["roomLayout"]["tables"][0]["rotation"] == 15
         page.locator("#roomAddPath").click()
         page.wait_for_timeout(250)
-        paths = page.evaluate("(key) => JSON.parse(localStorage.getItem(key)).roomLayout.paths.length", KEY)
+        paths = active_state(page)["roomLayout"]["paths"]
+        paths = len(paths)
         assert paths == 1
         page.reload()
         expect(page.locator("[data-room-template='u']")).to_be_visible()
         page.locator('[data-room-template="u"]').click()
         page.wait_for_timeout(250)
-        assert page.evaluate("(key) => JSON.parse(localStorage.getItem(key)).roomLayout.template", KEY) == "u"
+        assert active_state(page)["roomLayout"]["template"] == "u"
 
         page.locator("#homeButton").click()
         page.locator("#groupPlannerOpen").click()
@@ -62,7 +66,7 @@ try:
         page.locator("#groupDrawButton").click()
         expect(page.locator(".task-group")).to_have_count(4)
         page.wait_for_timeout(250)
-        result = page.evaluate("(key) => JSON.parse(localStorage.getItem(key))", KEY)
+        result = active_state(page)
         activity = result["activities"][0]
         assert activity["title"] == "臨時任務"
         assert sorted(number for group in activity["groups"] for number in group["members"]) == list(range(1, 13))
@@ -70,9 +74,9 @@ try:
         assert activity["groupTables"].get(activity["groups"][0]["id"]), activity
         assert result["hasDrawn"] is False
         page.locator("[data-group-lock]").first.click()
-        before = page.evaluate("(key) => JSON.parse(localStorage.getItem(key)).activities[0].groups[0].members", KEY)
+        before = active_state(page)["activities"][0]["groups"][0]["members"]
         page.locator("#groupRedrawButton").click()
-        after = page.evaluate("(key) => JSON.parse(localStorage.getItem(key)).activities[0].groups[0].members", KEY)
+        after = active_state(page)["activities"][0]["groups"][0]["members"]
         assert before == after
         page.locator("#groupUndoButton").click()
         page.locator("#groupRedoButton").click()
@@ -86,7 +90,17 @@ try:
         exported = Path(download_event.value.path()).read_bytes()
         page.locator("#importFileInput").set_input_files({"name": "task-backup.json", "mimeType": "application/json", "buffer": exported})
         page.wait_for_timeout(250)
-        assert page.evaluate("(key) => JSON.parse(localStorage.getItem(key)).activities[0].title", KEY) == "臨時任務"
+        assert active_state(page)["activities"][0]["title"] == "臨時任務"
+        assert page.locator("#classSelector option").count() == 2
+        page.locator("#addClassButton").click()
+        expect(page.locator("#classSelector option")).to_have_count(3)
+        page.locator("#classNameInput").fill("測試新班")
+        page.locator("#classNameInput").press("Tab")
+        page.wait_for_timeout(250)
+        page.locator("#classSelector").select_option(index=0)
+        expect(page.locator("#classNameInput")).not_to_have_value("測試新班")
+        page.locator("#classSelector").select_option(label="測試新班")
+        expect(page.locator("#classNameInput")).to_have_value("測試新班")
         assert not errors, errors
         print(json.dumps({"status": "passed", "page_errors": errors}))
         browser.close()
