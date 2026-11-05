@@ -58,6 +58,39 @@
     document.getElementById("deleteClassButton").disabled = workspace.classes.length <= 1;
   }
 
+  function classStateSnapshot(value) {
+    return {
+      config: value.config,
+      seats: value.seats,
+      assignment: value.assignment,
+      hasDrawn: value.hasDrawn,
+      resultSource: value.resultSource,
+      manualDraft: value.manualDraft,
+      activities: value.activities,
+      roomLayout: value.roomLayout
+    };
+  }
+
+  function hasUntouchedDemoClass() {
+    if (!workspace || workspace.classes.length !== 1) return false;
+    const demo = hydrate(SeatMaster.createDefaultState());
+    return JSON.stringify(classStateSnapshot(state)) === JSON.stringify(classStateSnapshot(demo));
+  }
+
+  function replaceWorkspace(incoming) {
+    workspace = incoming;
+    state = hydrate(activeClassEntry().state);
+    activeClassEntry().state = state;
+    roomUndoStack = []; roomRedoStack = []; roomRangeEdits.clear();
+    selectedTableId = state.roomLayout?.selectedTableId || null;
+    selectedPathId = state.roomLayout?.selectedPathId || null;
+    selectedAdjustmentSeatId = null;
+    adminMode = state.manualDraft ? "manual" : state.adminMode;
+    manual.reset();
+    render();
+    saveWorkspace();
+  }
+
   function switchClass(id) {
     if (!workspace || id === workspace.activeClassId || !workspace.classes.some((entry) => entry.id === id)) return;
     closeStudentProfile();
@@ -117,6 +150,7 @@
 
   function importClasses(incoming) {
     if (!incoming?.classes?.length) return;
+    if (hasUntouchedDemoClass()) { replaceWorkspace(incoming); return; }
     syncActiveClass();
     const used = new Set(workspace.classes.map((entry) => entry.id));
     let suffix = 1;
@@ -233,7 +267,6 @@
     const atHome = adminMode === "layout" && !document.body.classList.contains("presentation-mode");
     document.getElementById("homeButtonText").textContent = i18n.t(atHome ? "home.current" : "home.back");
     document.getElementById("homeButton").setAttribute("aria-current", atHome ? "page" : "false");
-    document.getElementById("otherToolsLink").hidden = !atHome;
     document.querySelectorAll("[data-admin-mode]").forEach((button) => {
       const active = button.dataset.adminMode === adminMode;
       button.classList.toggle("is-active", active);

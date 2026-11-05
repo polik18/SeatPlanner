@@ -177,7 +177,8 @@
       const html = [];
       let collisionCount = 0;
       (state.roomLayout.paths || []).forEach((path) => {
-        html.push(`<div class="room-path${path.id === state.roomLayout.selectedPathId ? " is-selected" : ""}" data-path-id="${escapeHtml(path.id)}" style="left:${path.x}%;top:${path.y}%;width:${path.width}%;height:${path.height}%">${escapeHtml(path.label)}${state.roomLayout.editing && !presentation ? `<button class="room-path-handle" data-path-handle="true" type="button" aria-label="${escapeHtml(i18n.t("room.movePath"))}"></button>` : ""}</div>`);
+        const selectable = !path.locked;
+        html.push(`<div class="room-path${path.locked ? " is-locked" : ""}${path.id === state.roomLayout.selectedPathId ? " is-selected" : ""}" ${selectable ? `data-path-id="${escapeHtml(path.id)}"` : ""} style="left:${path.x}%;top:${path.y}%;width:${path.width}%;height:${path.height}%">${escapeHtml(path.label)}${selectable && state.roomLayout.editing && !presentation ? `<button class="room-path-handle" data-path-handle="true" type="button" aria-label="${escapeHtml(i18n.t("room.movePath"))}"></button>` : ""}</div>`);
       });
       state.roomLayout.tables.forEach((table, index) => {
         const points = SeatMaster.roomLayout.seatPoints(table, table.seatIds.length);
@@ -219,9 +220,10 @@
       grid.innerHTML = html.join("");
       const geometryStatus = document.getElementById("roomGeometryStatus");
       if (geometryStatus) {
+        const pathConflictCount = state.roomLayout.tables.filter((table) => state.roomLayout.paths.some((path) => SeatMaster.roomLayout.tableIntersectsPath(table, path))).length;
         geometryStatus.hidden = false;
-        geometryStatus.textContent = collisionCount ? i18n.t("room.seatOverlap", { count: collisionCount }) : i18n.t("room.geometryOk");
-        geometryStatus.classList.toggle("is-warning", collisionCount > 0);
+        geometryStatus.textContent = collisionCount ? i18n.t("room.seatOverlap", { count: collisionCount }) : pathConflictCount ? i18n.t("room.pathOverlap", { count: pathConflictCount }) : i18n.t("room.geometryOk");
+        geometryStatus.classList.toggle("is-warning", collisionCount > 0 || pathConflictCount > 0);
       }
       const toolbar = document.getElementById("roomLayoutToolbar");
       if (toolbar) toolbar.hidden = presentation;

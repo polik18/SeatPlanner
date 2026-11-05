@@ -26,11 +26,21 @@
       seats.forEach((seat, index) => {
         const tableIndex = Math.floor(index / capacity);
         if (!tables[tableIndex]) {
-          const columns = count <= 2 ? count : Math.ceil(Math.sqrt(count));
+          const isIsland = template === "islands" && count > 1;
+          const columns = isIsland ? (count <= 4 ? 2 : 4) : (count <= 2 ? count : Math.ceil(Math.sqrt(count)));
           const rows = Math.ceil(count / columns);
-          const x = ((tableIndex % columns) + 0.5) * (100 / columns);
-          const y = (Math.floor(tableIndex / columns) + 0.5) * (100 / rows);
-          tables[tableIndex] = { id: `table-${tableIndex + 1}`, type: tableType, x, y, width: Math.min(34, 82 / columns), height: Math.min(36, 82 / rows), rotation: 0, seatIds: [], seatPositions: [], geometry: { opening: "bottom", seatRadius: 44, startAngle: -90, armThickness: 12 }, edgeCounts: null };
+          const column = tableIndex % columns;
+          const row = Math.floor(tableIndex / columns);
+          const sideColumns = isIsland ? columns / 2 : columns;
+          const onLeft = !isIsland || column < sideColumns;
+          const columnInSide = isIsland ? column % sideColumns : column;
+          const zoneStart = isIsland ? (onLeft ? 0 : 58) : 0;
+          const zoneWidth = isIsland ? 42 : 100;
+          const x = zoneStart + (columnInSide + 0.5) * (zoneWidth / sideColumns);
+          const y = isIsland ? 11 + (row + 0.5) * (78 / rows) : (row + 0.5) * (100 / rows);
+          const width = isIsland ? (columns === 2 ? 30 : 18) : Math.min(34, 82 / columns);
+          const height = isIsland ? Math.max(22, Math.min(34, 78 / rows - 6)) : Math.min(36, 82 / rows);
+          tables[tableIndex] = { id: `table-${tableIndex + 1}`, type: tableType, x, y, width, height, rotation: 0, seatIds: [], seatPositions: [], geometry: { opening: "bottom", seatRadius: 44, startAngle: -90, armThickness: 12 }, edgeCounts: null };
         }
         tables[tableIndex].seatIds.push(seat.id);
       });
@@ -45,7 +55,7 @@
         nextTableId: tables.length + 1,
         nextSeatId: next,
         tables,
-        paths: template === "islands" ? [{ id: "path-1", x: 47, y: 8, width: 6, height: 84, label: "輪椅／主要通道" }] : []
+        paths: template === "islands" && tables.length > 1 ? [{ id: "path-1", x: 44, y: 5, width: 12, height: 90, label: "中央主要通道", locked: true }] : []
       }
     };
   }
@@ -85,7 +95,8 @@
       y: Math.max(0, Math.min(95, Number(path.y) || 0)),
       width: Math.max(3, Math.min(40, Number(path.width) || 6)),
       height: Math.max(3, Math.min(40, Number(path.height) || 20)),
-      label: String(path.label || "輪椅／主要通道").slice(0, 40)
+      label: String(path.label || "輪椅／主要通道").slice(0, 40),
+      locked: Boolean(path.locked)
     })) : [];
     const selectedTableId = tables.some((table) => table.id === layout.selectedTableId) ? layout.selectedTableId : tables[0]?.id || null;
     const selectedPathId = paths.some((path) => path.id === layout.selectedPathId) ? layout.selectedPathId : paths[0]?.id || null;
@@ -107,6 +118,17 @@
   }
 
   function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+  function tableIntersectsPath(table, path, clearance = 0) {
+    const left = Number(table.x) - Number(table.width) / 2 - clearance;
+    const right = Number(table.x) + Number(table.width) / 2 + clearance;
+    const top = Number(table.y) - Number(table.height) / 2 - clearance;
+    const bottom = Number(table.y) + Number(table.height) / 2 + clearance;
+    const pathLeft = Number(path.x);
+    const pathRight = Number(path.x) + Number(path.width);
+    const pathTop = Number(path.y);
+    const pathBottom = Number(path.y) + Number(path.height);
+    return left < pathRight && right > pathLeft && top < pathBottom && bottom > pathTop;
+  }
   function normalizeAngle(value) { return ((Number(value) || 0) % 360 + 360) % 360; }
   function normalizeEdgeCounts(value) {
     if (!value || typeof value !== "object") return null;
@@ -187,5 +209,5 @@
     return ids.map((id) => known.get(id));
   }
 
-  SM.roomLayout = { createTemplate, normalize, normalizeSeats, seatPoints, autoSeatPositions, setSeatCount, defaultEdgeCounts, activeEdges };
+  SM.roomLayout = { createTemplate, normalize, normalizeSeats, seatPoints, autoSeatPositions, setSeatCount, defaultEdgeCounts, activeEdges, tableIntersectsPath };
 })();

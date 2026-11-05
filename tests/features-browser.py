@@ -26,6 +26,14 @@ try:
         page = browser.new_page(viewport={"width": 1440, "height": 1000})
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(f"http://127.0.0.1:{server.server_port}/")
+        demo_backup = page.evaluate("(key) => JSON.parse(localStorage.getItem(key))", KEY)
+        demo_backup["classes"][0]["id"] = "imported-class"
+        demo_backup["activeClassId"] = "imported-class"
+        demo_backup["classes"][0]["state"]["config"]["className"] = "匯入班級"
+        page.locator("#importFileInput").set_input_files({"name": "single-class.json", "mimeType": "application/json", "buffer": json.dumps(demo_backup).encode()})
+        page.wait_for_timeout(250)
+        expect(page.locator("#classSelector option")).to_have_count(1)
+        expect(page.locator("#classNameInput")).to_have_value("匯入班級")
         page.locator("#maxNumberInput").fill("12")
         page.locator("#emptyNumbersInput").fill("")
         page.locator("#seatExcludedNumbersInput").fill("2, 5")

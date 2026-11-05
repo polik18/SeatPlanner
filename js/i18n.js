@@ -5,7 +5,7 @@
   const LANGUAGE_KEY = "classroom-seat-master:language";
   const dictionaries = {
     "zh-Hant": {
-      "home.back": "回首頁", "home.current": "首頁", "home.otherTools": "其他教學工具 ↗", "home.navigation": "首頁導覽",
+      "home.back": "回首頁", "home.current": "首頁", "home.navigation": "首頁導覽",
       "mode.manual": "全手動排位",
       "mode.manualHelp": "選學生，再點座位；排好自動接續下一位。",
       "manual.eyebrow": "逐一安排",
@@ -54,7 +54,7 @@
       "groups.newTask": "新增任務", "groups.preassignTables": "任務座位預排（選填）", "groups.noSeatPlan": "尚未指定桌組", "groups.noSeatAreas": "目前沒有可安排的桌組／座位區。", "groups.seatArea": "任務桌組", "groups.seatZone": "座位區 {number}", "groups.assignSeat": "安排 {student} 的任務座位", "groups.seatNumber": "座位 {number}", "groups.noTaskSeat": "尚未安排任務座位", "groups.seatAreaMissing": "指定桌組已不存在", "groups.seatCapacity": "指定桌組容量為 {count} 席", "groups.seatOutsideArea": "座位不屬於指定桌組", "groups.duplicateTaskSeat": "同一座位被重複指派。", "room.keepOneTable": "教室至少要保留一個桌組。", "room.wheelchairPath": "輪椅／主要通道",
       "room.seatCount": "每桌座位數", "room.seatX": "選取座位 X", "room.seatY": "Y", "room.autoArrangeSeats": "自動排列此桌座位", "room.opening": "U 型開口", "room.openBottom": "朝下", "room.openTop": "朝上", "room.openLeft": "朝左", "room.openRight": "朝右", "room.roundRadius": "圓桌座位半徑", "room.edgeTop": "上邊", "room.edgeRight": "右邊", "room.edgeBottom": "下邊", "room.edgeLeft": "左邊",
       "room.tableWidth": "桌寬 %", "room.tableHeight": "桌高 %", "room.zoom": "畫布縮放", "room.zoomReset": "重設視圖",
-      "room.seatOverlap": "有 {count} 個座位過於靠近，請調整桌組或單席位置。", "room.geometryOk": "目前座位間距清楚。",
+      "room.seatOverlap": "有 {count} 個座位過於靠近，請調整桌組或單席位置。", "room.pathOverlap": "有 {count} 張桌組壓到保留動線，請移開桌組。", "room.geometryOk": "目前座位間距清楚。",
       "room.undo": "復原桌位編輯", "room.redo": "重做桌位編輯",
       "room.geometryHelp": "調整桌型、開口、各邊座位數或自動排列，會重排該桌座位；手動位置可用復原還原。",
 
@@ -82,7 +82,7 @@
       "toast.fixFirst": "請先修正座位配置，再進入展示模式。", "toast.pinned": "{number} 號已固定；展示模式不會顯示標記。", "toast.unpinned": "已取消固定座位。", "toast.rotatedClockwise": "座位表已順時針旋轉 90°。", "toast.rotatedCounterclockwise": "座位表已逆時針旋轉 90°。", "toast.genderPatternApplied": "已套用「{pattern}」。", "toast.genderPatternRelaxed": "因男女比例，有 {count} 席保留為不限。", "toast.genderPatternPinsCleared": "另清除 {count} 個衝突的固定座位。", "toast.fullscreen": "瀏覽器未允許全螢幕。", "toast.exported": "設定檔已匯出。", "toast.imported": "設定已成功匯入。", "toast.importFailed": "匯入失敗。", "toast.clearedPins": "所有固定座位已清除。", "toast.reset": "已恢復 4 行 × 8 排預設配置。", "toast.rosterParsed": "已辨識並轉換 {count} 筆學生資料。", "toast.rosterParsedPartial": "已轉換 {count} 筆學生資料；目前有 {total} 個有效座號，另有 {missing} 人未填資料。", "toast.rosterEmpty": "沒有辨識到有效的學生資料。", "confirm.reset": "確定要恢復預設值？目前座位設定會被清除。", "confirm.deleteClass": "確定刪除「{className}」嗎？這個班級的資料會從本機清除。", "storage.suffix": "座位設定", "storage.invalid": "這不是有效的 Classroom Seat Master 設定檔。"
     },
     en: {
-      "home.back": "Back to home", "home.current": "Home", "home.otherTools": "More teaching tools ↗", "home.navigation": "Home navigation",
+      "home.back": "Back to home", "home.current": "Home", "home.navigation": "Home navigation",
       "mode.manual": "Manual seating",
       "mode.manualHelp": "Choose a student, then a desk. Continue with the next student.",
       "manual.eyebrow": "ONE STUDENT AT A TIME",
@@ -131,7 +131,7 @@
       "groups.newTask": "New task", "groups.preassignTables": "Preassign task tables (optional)", "groups.noSeatPlan": "No table selected", "groups.noSeatAreas": "There are no tables or seat areas to assign.", "groups.seatArea": "Task table", "groups.seatZone": "Seat area {number}", "groups.assignSeat": "Assign a task seat to {student}", "groups.seatNumber": "Seat {number}", "groups.noTaskSeat": "No task seat assigned", "groups.seatAreaMissing": "The selected table no longer exists", "groups.seatCapacity": "The selected table has {count} seats", "groups.seatOutsideArea": "The seat is outside the selected table", "groups.duplicateTaskSeat": "A seat has been assigned more than once.", "room.keepOneTable": "Keep at least one table in the room.", "room.wheelchairPath": "Wheelchair / main path",
       "room.seatCount": "Seats per table", "room.seatX": "Selected seat X", "room.seatY": "Y", "room.autoArrangeSeats": "Auto arrange this table", "room.opening": "U opening", "room.openBottom": "Bottom", "room.openTop": "Top", "room.openLeft": "Left", "room.openRight": "Right", "room.roundRadius": "Round table seat radius", "room.edgeTop": "Top", "room.edgeRight": "Right", "room.edgeBottom": "Bottom", "room.edgeLeft": "Left",
       "room.tableWidth": "Table width %", "room.tableHeight": "Table height %", "room.zoom": "Canvas zoom", "room.zoomReset": "Reset view",
-      "room.seatOverlap": "{count} seats are too close together. Adjust the table or individual seats.", "room.geometryOk": "Seat spacing looks clear.",
+      "room.seatOverlap": "{count} seats are too close together. Adjust the table or individual seats.", "room.pathOverlap": "{count} table(s) overlap a reserved path. Move the table away.", "room.geometryOk": "Seat spacing looks clear.",
       "room.undo": "Undo room edit", "room.redo": "Redo room edit",
       "room.geometryHelp": "Changing the shape, opening, edge counts, or automatic layout repositions the table seats. Use Undo to restore manual positions.",
 
