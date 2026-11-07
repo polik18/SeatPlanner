@@ -11,6 +11,7 @@ try:
         support.rule(page,1,3)
         private_ids=[row['studentId'] for row in support.active(page)['state']['rosterIdentity']]
         page.screenshot(path=str(support.ROOT/'test-results'/'v5-separation-desktop.png'))
+        page.locator('#reviewRosterButton').click();expect(page.locator('#rosterIdentityDialog')).to_be_visible();page.locator('[data-close-v5="rosterIdentityDialog"]').click()
         page.locator('#presentationButton').click()
         assert all(value not in page.content() for value in private_ids),'student identity registry must not enter projection DOM'
         for _ in range(15):

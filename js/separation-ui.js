@@ -6,7 +6,7 @@
   function labels(state){const roster=SM.engine.buildStudents(state.config),names=SM.engine.parseStudentNames(state.config.studentData,roster);return new Map((state.rosterIdentity||[]).map(row=>[row.studentId,row.number===null?say('已離開目前名單','Not in current roster'):`${row.number} ${names.get(row.number)||''}`]));}
   function render(){
     if(!api)return;
-    if(document.body.classList.contains('presentation-mode')){for(const id of ['separationRules','ruleStudentA','ruleStudentB','separationStatus','topologyPreview','topologyEdges'])$(id).replaceChildren();return;}
+    if(document.body.classList.contains('presentation-mode')){for(const id of ['separationRules','ruleStudentA','ruleStudentB','separationStatus','topologyPreview','topologyEdges','rosterIdentityRows'])$(id).replaceChildren();return;}
     const state=api.getState(),names=labels(state),search=$('ruleSearch').value.toLocaleLowerCase();
     const activeNumbers=new Set(SM.engine.buildStudents(state.config).map(s=>s.number));
     const identities=state.rosterIdentity.filter(row=>activeNumbers.has(row.number));
@@ -24,9 +24,11 @@
   function checkpoint(candidate){const e=candidate.classes.find(c=>c.id===candidate.activeClassId);if(e.state.hasDrawn)D.addRecord(e,say('修改規則前排位','Seating before rule changes'));return e.state;}
   function drawTopology(){
     const state=api.getState(),nodes=C.points(state),byId=new Map(nodes.map(p=>[p.id,p]));
-    $('topologyPreview').innerHTML=`<svg viewBox="-5 -5 110 110" role="img" aria-label="${say('座位鄰接圖','Seat adjacency map')}">${edges.map(([a,b])=>byId.has(a)&&byId.has(b)?`<line x1="${byId.get(a).x}" y1="${byId.get(a).y}" x2="${byId.get(b).x}" y2="${byId.get(b).y}" stroke="#9d6a34" stroke-width=".5"/>`:'').join('')}${nodes.map(p=>`<circle cx="${p.x}" cy="${p.y}" r="1.5" fill="#36513a"/><text x="${p.x+1.7}" y="${p.y-1.5}" font-size="2.5">${esc(p.id)}</text>`).join('')}</svg>`;
-    $('topologyEdges').innerHTML=edges.map(([a,b],index)=>`<label><input type="checkbox" data-topology-edge="${index}" checked />${esc(a)} ↔ ${esc(b)}</label>`).join('');
-    for(const id of ['topologySeatA','topologySeatB'])$(id).innerHTML=nodes.map(node=>`<option value="${esc(node.id)}">${esc(node.id)}</option>`).join('');
+    const label=id=>{const seat=state.seats.find(item=>item.id===id);if(!seat)return say('已移除座位','Removed seat');const coordinate=SM.ui.columnLabel(seat.col)+(seat.row+1);const tableIndex=state.roomLayout?.tables.findIndex(table=>table.seatIds.includes(id));return tableIndex>=0?say(`${tableIndex+1} 桌 ${coordinate}`,`Table ${tableIndex+1} ${coordinate}`):coordinate;};
+    const left=Math.min(0,...nodes.map(p=>p.x))-5,top=Math.min(0,...nodes.map(p=>p.y))-5,right=Math.max(100,...nodes.map(p=>p.x))+5,bottom=Math.max(100,...nodes.map(p=>p.y))+5;
+    $('topologyPreview').innerHTML=`<svg viewBox="${left} ${top} ${right-left} ${bottom-top}" role="img" aria-label="${say('座位鄰接圖','Seat adjacency map')}">${edges.map(([a,b])=>byId.has(a)&&byId.has(b)?`<line x1="${byId.get(a).x}" y1="${byId.get(a).y}" x2="${byId.get(b).x}" y2="${byId.get(b).y}" stroke="#9d6a34" stroke-width=".5"/>`:'').join('')}${nodes.map(p=>`<circle cx="${p.x}" cy="${p.y}" r="1.5" fill="#36513a"/><text x="${p.x+1.7}" y="${p.y-1.5}" font-size="2.5">${esc(label(p.id))}</text>`).join('')}</svg>`;
+    $('topologyEdges').innerHTML=edges.map(([a,b],index)=>`<label><input type="checkbox" data-topology-edge="${index}" checked />${esc(label(a))} ↔ ${esc(label(b))}</label>`).join('');
+    for(const id of ['topologySeatA','topologySeatB'])$(id).innerHTML=nodes.map(node=>`<option value="${esc(node.id)}">${esc(label(node.id))}</option>`).join('');
     if($('topologySeatB').options.length>1)$('topologySeatB').selectedIndex=1;
     $('topologyConfirm').disabled=!state.roomLayout;
     $('topologyNotice').textContent=state.roomLayout?say('請檢查連線後確認；改動布局後需重新確認。','Review and confirm edges. Layout changes require reconfirmation.'):say('網格固定採八方向相鄰；此預覽不可修改。','Grid uses eight-direction adjacency. This preview is fixed.');
