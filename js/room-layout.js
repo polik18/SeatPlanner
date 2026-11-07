@@ -86,7 +86,7 @@
     tables.forEach((table) => {
       const positions = new Map(table.seatPositions.filter((position) => table.seatIds.includes(position.id)).map((position) => [position.id, position]));
       const missing = table.seatIds.filter((id) => !positions.has(id));
-      autoSeatPositions(table, missing).forEach((position) => positions.set(position.id, position));
+      if (missing.length) autoSeatPositions(table, table.seatIds).forEach((position) => positions.set(position.id, position));
       table.seatPositions = table.seatIds.map((id) => positions.get(id));
     });
     const paths = Array.isArray(layout.paths) ? layout.paths.filter((path) => path && typeof path.id === "string").map((path) => ({
@@ -119,16 +119,25 @@
 
   function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
   function tableIntersectsPath(table, path, clearance = 0) {
-    const left = Number(table.x) - Number(table.width) / 2 - clearance;
-    const right = Number(table.x) + Number(table.width) / 2 + clearance;
-    const top = Number(table.y) - Number(table.height) / 2 - clearance;
-    const bottom = Number(table.y) + Number(table.height) / 2 + clearance;
-    const pathLeft = Number(path.x);
-    const pathRight = Number(path.x) + Number(path.width);
-    const pathTop = Number(path.y);
-    const pathBottom = Number(path.y) + Number(path.height);
-    return left < pathRight && right > pathLeft && top < pathBottom && bottom > pathTop;
+    return polygonsIntersect(tablePolygon(table, clearance), tablePolygon({ x: Number(path.x) + Number(path.width) / 2, y: Number(path.y) + Number(path.height) / 2, width: Number(path.width), height: Number(path.height), rotation: 0 }));
   }
+  function tablePolygon(table, clearance = 0) {
+    const angle = (Number(table.rotation) || 0) * Math.PI / 180;
+    const halfW = Number(table.width) / 2 + clearance;
+    const halfH = Number(table.height) / 2 + clearance;
+    return [[-halfW, -halfH], [halfW, -halfH], [halfW, halfH], [-halfW, halfH]].map(([x, y]) => ({ x: Number(table.x) + x * Math.cos(angle) - y * Math.sin(angle), y: Number(table.y) + x * Math.sin(angle) + y * Math.cos(angle) }));
+  }
+  function polygonsIntersect(a, b) {
+    for (const polygon of [a, b]) for (let i = 0; i < polygon.length; i += 1) {
+      const next = polygon[(i + 1) % polygon.length];
+      const axis = { x: -(next.y - polygon[i].y), y: next.x - polygon[i].x };
+      const project = (points) => points.map((point) => point.x * axis.x + point.y * axis.y);
+      const aa = project(a), bb = project(b);
+      if (Math.max(...aa) <= Math.min(...bb) || Math.max(...bb) <= Math.min(...aa)) return false;
+    }
+    return true;
+  }
+  function tablesIntersect(a, b) { return polygonsIntersect(tablePolygon(a), tablePolygon(b)); }
   function normalizeAngle(value) { return ((Number(value) || 0) % 360 + 360) % 360; }
   function normalizeEdgeCounts(value) {
     if (!value || typeof value !== "object") return null;
@@ -198,7 +207,7 @@
     while (nextIds.length < count) nextIds.push(`free-${nextId()}`);
     const known = new Map((table.seatPositions || []).map((position) => [position.id, position]));
     const positions = autoSeatPositions(table, nextIds);
-    return { seatIds: nextIds, seatPositions: positions.map((position) => resetExisting ? position : known.get(position.id) || position) };
+    return { seatIds: nextIds, seatPositions: positions.map((position) => resetExisting || count !== seatIds.length ? position : known.get(position.id) || position) };
   }
 
   function seatPoints(table, count) {
@@ -209,5 +218,5 @@
     return ids.map((id) => known.get(id));
   }
 
-  SM.roomLayout = { createTemplate, normalize, normalizeSeats, seatPoints, autoSeatPositions, setSeatCount, defaultEdgeCounts, activeEdges, tableIntersectsPath };
+  SM.roomLayout = { createTemplate, normalize, normalizeSeats, seatPoints, autoSeatPositions, setSeatCount, defaultEdgeCounts, activeEdges, tableIntersectsPath, tablesIntersect };
 })();

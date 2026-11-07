@@ -160,7 +160,8 @@
     }
   };
 
-  let language = localStorage.getItem(LANGUAGE_KEY) === "en" ? "en" : "zh-Hant";
+  let language = "zh-Hant";
+  try { language = localStorage.getItem(LANGUAGE_KEY) === "en" ? "en" : "zh-Hant"; } catch (_) { /* memory-only language */ }
 
   function t(key, values) {
     let text = (dictionaries[language] && dictionaries[language][key]) || dictionaries["zh-Hant"][key] || key;
@@ -179,11 +180,11 @@
 
   function setLanguage(nextLanguage) {
     language = nextLanguage === "en" ? "en" : "zh-Hant";
-    localStorage.setItem(LANGUAGE_KEY, language);
+    try { localStorage.setItem(LANGUAGE_KEY, language); } catch (_) { /* memory-only language */ }
     apply();
     window.dispatchEvent(new CustomEvent("seatmaster:languagechange", { detail: { language } }));
     return language;
   }
 
-  SeatMaster.i18n = { t, apply, getLanguage: () => language, setLanguage, toggle: () => setLanguage(language === "en" ? "zh-Hant" : "en") };
+  SeatMaster.i18n = { t, apply, getLanguage: () => language, setLanguage, addMessages: (messages) => Object.entries(messages).forEach(([locale, entries]) => Object.assign(dictionaries[locale], entries)), toggle: () => setLanguage(language === "en" ? "zh-Hant" : "en") };
 })();

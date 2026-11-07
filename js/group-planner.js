@@ -14,6 +14,8 @@
   function draw(students, targetSize, strategy, preassignments) {
     if (!Number.isInteger(targetSize) || targetSize < 2 || targetSize > 6) throw new RangeError("每組人數需介於 2–6 人。");
     const pool = Array.from(students || []);
+    if (new Set(pool.map((student) => student.number)).size !== pool.length) throw new Error("學生座號重複，請先檢查名單。");
+    if (strategy === "same") return drawSame(pool, targetSize, preassignments || {});
     let groupsCount = numberOfGroups(pool.length, targetSize);
     if (strategy === "same" && pool.length > 1) {
       const males = pool.filter((student) => student.gender === "male").length;
@@ -72,6 +74,63 @@
       });
     }
     return groups;
+  }
+
+  // Search group counts before allocating students. Average capacity is not a
+  // constraint: a six-person group and a two-person group are both legal.
+  function drawSame(pool, targetSize, assignments) {
+    if (!pool.length) return [];
+    if (pool.length === 1) throw new Error("同性別分組每組至少需要 2 人。");
+    const byNumber = new Map(pool.map((student) => [student.number, student]));
+    const genders = [...new Set(pool.map((student) => student.gender))];
+    const pinned = new Map();
+    Object.entries(assignments).forEach(([rawNumber, rawIndex]) => {
+      const student = byNumber.get(Number(rawNumber));
+      if (!student) return;
+      const index = Number(rawIndex);
+      if (!Number.isInteger(index) || index < 0 || index >= Math.floor(pool.length / 2)) throw new RangeError("預先安排的小組編號無效。");
+      const group = pinned.get(index) || { gender: student.gender, members: [] };
+      if (group.gender !== student.gender) throw new Error("同組預排成員性別不同，請調整優先安排。");
+      group.members.push(student.number);
+      if (group.members.length > 6) throw new Error("預排小組已達 6 人上限。");
+      pinned.set(index, group);
+    });
+    const preferred = numberOfGroups(pool.length, targetSize);
+    const candidates = Array.from({ length: Math.floor(pool.length / 2) }, (_, i) => i + 1).sort((a, b) => Math.abs(a - preferred) - Math.abs(b - preferred) || a - b);
+    let chosen;
+    for (const count of candidates) {
+      if ([...pinned.keys()].some((index) => index >= count)) continue;
+      const allocation = new Map();
+      const search = (position, remaining) => {
+        if (position === genders.length) return remaining === 0;
+        const gender = genders[position];
+        const students = pool.filter((student) => student.gender === gender);
+        const fixed = [...pinned.values()].filter((group) => group.gender === gender);
+        const fixedMembers = fixed.reduce((sum, group) => sum + group.members.length, 0);
+        for (let groups = Math.max(fixed.length, Math.ceil(students.length / 6)); groups <= Math.min(remaining, Math.floor(students.length / 2)); groups += 1) {
+          const minimumNeeded = fixed.reduce((sum, group) => sum + Math.max(0, 2 - group.members.length), 0) + 2 * (groups - fixed.length);
+          if (minimumNeeded > students.length - fixedMembers) continue;
+          allocation.set(gender, groups);
+          if (search(position + 1, remaining - groups)) return true;
+        }
+        return false;
+      };
+      if (!search(0, count)) continue;
+      chosen = Array.from({ length: count }, (_, index) => ({ id: `group-${index + 1}`, name: `第 ${index + 1} 組`, members: [...(pinned.get(index)?.members || [])], locked: false, gender: pinned.get(index)?.gender || "" }));
+      for (const gender of genders) {
+        let needed = allocation.get(gender) - chosen.filter((group) => group.gender === gender).length;
+        for (const group of chosen) if (!group.gender && needed > 0) { group.gender = gender; needed -= 1; }
+        const groups = chosen.filter((group) => group.gender === gender);
+        const assigned = new Set(groups.flatMap((group) => group.members));
+        const pending = SM.engine.secureShuffle(pool.filter((student) => student.gender === gender && !assigned.has(student.number)));
+        for (const student of pending) {
+          const target = groups.filter((group) => group.members.length < 6).sort((a, b) => a.members.length - b.members.length)[0];
+          target.members.push(student.number);
+        }
+      }
+      if (validate(chosen, pool.map((student) => student.number)).valid) return chosen;
+    }
+    throw new Error("同性別分組需讓每組有 2–6 人；請檢查單一性別人數及預排，或改用混合分組。");
   }
 
   function validate(groups, numbers) {

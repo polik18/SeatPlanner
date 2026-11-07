@@ -3,6 +3,8 @@
 
   const SeatMaster = (window.SeatMaster = window.SeatMaster || {});
   const { STORAGE_KEY, VERSION } = SeatMaster.constants;
+  let writeBlocked = false;
+  let loadStatus = { status: "empty" };
 
   function serializableState(state) {
     return {
@@ -20,7 +22,9 @@
   }
 
   function isClassState(value) {
-    return Boolean(value && value.config && Array.isArray(value.seats));
+    if (!value || !value.config || typeof value.config !== "object" || !Array.isArray(value.seats)) return false;
+    const ids = new Set();
+    return value.seats.every((seat) => seat && typeof seat.id === "string" && seat.id && !ids.has(seat.id) && ids.add(seat.id) && Number.isInteger(seat.row) && Number.isInteger(seat.col) && SeatMaster.constants.SEAT_TYPES.includes(seat.type) && (seat.pin == null || Number.isInteger(seat.pin)));
   }
 
   function migrateClassState(parsed) {
@@ -49,8 +53,8 @@
         const id = typeof entry.id === "string" && entry.id && !used.has(entry.id) ? entry.id : classId(index + 1, used);
         used.add(id);
         return { id, state };
-      }).filter(Boolean);
-      if (!classes.length) return null;
+      });
+      if (!classes.length || classes.some((entry) => !entry)) return null;
       const activeClassId = classes.some((entry) => entry.id === parsed.activeClassId) ? parsed.activeClassId : classes[0].id;
       return { version: VERSION, activeClassId, classes };
     }
@@ -60,33 +64,50 @@
 
   SeatMaster.storage = {
     save(workspace) {
+      if (writeBlocked) return { ok: false, error: new Error("Original storage could not be read. Export your work before recovery.") };
+      try {
       const migrated = migrate(workspace);
-      if (!migrated) return;
+      if (!migrated) return { ok: false, error: new Error("Invalid workspace") };
       const serializable = {
         version: VERSION,
         activeClassId: migrated.activeClassId,
         classes: migrated.classes.map((entry) => ({ id: entry.id, state: serializableState(entry.state) }))
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+      return { ok: true };
+      } catch (error) { return { ok: false, error }; }
     },
 
     load() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem("classroom-seat-master:v3") || localStorage.getItem("classroom-seat-master:v2") || localStorage.getItem("classroom-seat-master:v1");
-        if (!raw) return null;
+        if (!raw) { loadStatus = { status: "empty" }; return null; }
         const parsed = JSON.parse(raw);
-        return migrate(parsed);
-      } catch (_error) {
+        const value = migrate(parsed);
+        if (!value) throw new Error("Invalid stored workspace");
+        loadStatus = { status: "loaded" };
+        return value;
+      } catch (error) {
+        writeBlocked = true;
+        loadStatus = { status: "error", error };
         return null;
       }
     },
 
     clear() {
+      try {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem("classroom-seat-master:v3");
       localStorage.removeItem("classroom-seat-master:v2");
       localStorage.removeItem("classroom-seat-master:v1");
+      writeBlocked = false;
+      return { ok: true };
+      } catch (error) { return { ok: false, error }; }
     },
+
+    getLoadStatus: () => loadStatus,
+    migrate,
+    serializableState,
 
     export(workspace) {
       const migrated = migrate(workspace);
@@ -96,7 +117,7 @@
       const link = document.createElement("a");
       const safeName = migrated.classes.length === 1 ? (migrated.classes[0].state.config.className || "class") : "classes";
       link.href = URL.createObjectURL(blob);
-      link.download = `${safeName}-${SeatMaster.i18n ? SeatMaster.i18n.t("storage.suffix") : "座位設定"}.json`;
+      link.download = `SeatPlanner-Inclusive-${safeName}-${SeatMaster.i18n ? SeatMaster.i18n.t("storage.suffix") : "座位設定"}.json`;
       document.body.appendChild(link);
       link.click();
       link.remove();
