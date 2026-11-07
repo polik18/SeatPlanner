@@ -1,0 +1,571 @@
+(function () {
+  "use strict";
+
+  const SeatMaster = (window.SeatMaster = window.SeatMaster || {});
+  const { SEAT_TYPES } = SeatMaster.constants;
+
+  function translated(key, values, fallback) {
+    if (SeatMaster.i18n) return SeatMaster.i18n.t(key, values);
+    let text = fallback;
+    Object.entries(values || {}).forEach(([name, value]) => { text = text.replaceAll(`{${name}}`, String(value)); });
+    return text;
+  }
+
+  function clampInteger(value, min, max, fallback) {
+    const number = Number.parseInt(value, 10);
+    return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
+  }
+
+  function parseEmptyNumbers(input, maxNumber) {
+    const result = new Set();
+    const normalized = String(input || "")
+      .replace(/[，、；;]/g, ",")
+      .replace(/[～~—–]/g, "-")
+      .replace(/\s+/g, ",");
+
+    normalized.split(",").filter(Boolean).forEach((token) => {
+      const range = token.match(/^(\d+)\s*-\s*(\d+)$/);
+      if (range) {
+        const start = Math.min(Number(range[1]), Number(range[2]));
+        const end = Math.max(Number(range[1]), Number(range[2]));
+        for (let number = start; number <= end; number += 1) {
+          if (number >= 1 && number <= maxNumber) result.add(number);
+        }
+        return;
+      }
+      if (/^\d+$/.test(token)) {
+        const number = Number(token);
+        if (number >= 1 && number <= maxNumber) result.add(number);
+      }
+    });
+    return result;
+  }
+
+  function buildStudents(config) {
+    const maxNumber = clampInteger(config.maxNumber, 1, 999, 34);
+    const femaleStart = clampInteger(config.femaleStart, 1, maxNumber + 1, 21);
+    const empty = parseEmptyNumbers(config.emptyNumbers, maxNumber);
+    const seatExcluded = parseEmptyNumbers(config.seatExcludedNumbers, maxNumber);
+    const students = [];
+    for (let number = 1; number <= maxNumber; number += 1) {
+      if (!empty.has(number)) {
+        students.push({ number, gender: number >= femaleStart ? "female" : "male", requiresSeat: !seatExcluded.has(number), participatesInActivities: true });
+      }
+    }
+    const records = parseStudentRecords(config.studentData || config.studentNames || "", students);
+    records.forEach((record, number) => {
+      const student = students.find((item) => item.number === number);
+      if (student && record.gender) student.gender = record.gender;
+    });
+    return students;
+  }
+
+  function studentsRequiringSeats(config) {
+    return buildStudents(config).filter((student) => student.requiresSeat);
+  }
+
+  function splitStudentDataCells(rawLine) {
+    if (rawLine.includes("\t")) return rawLine.split("\t").map((cell) => cell.trim());
+    if (/[，,]/.test(rawLine)) return rawLine.split(/[，,]/).map((cell) => cell.trim());
+    const colon = rawLine.trim().match(/^(\d+)\s*[:：]\s*(.+)$/);
+    if (colon) return [colon[1], colon[2].trim()];
+    const spaced = rawLine.trim().match(/^(\d+)\s{2,}(.+)$/);
+    if (spaced) return [spaced[1], spaced[2].trim()];
+    return [rawLine.trim()];
+  }
+
+  function isStudentDataHeader(cells) {
+    return /^(?:座號|學號|號碼|number|no\.?)$/i.test(cells[0] || "") && /^(?:姓名|name)$/i.test(cells[1] || "");
+  }
+
+  function normalizeGender(value) {
+    const normalized = String(value || "").trim().toLocaleLowerCase();
+    if (["男", "男生", "male", "m", "boy"].includes(normalized)) return "male";
+    if (["女", "女生", "female", "f", "girl"].includes(normalized)) return "female";
+    return "";
+  }
+
+  function inferStudentNumbers(input) {
+    const numbers = new Set();
+    let hasHeader = false;
+
+    String(input || "").split(/\r?\n/).forEach((rawLine) => {
+      if (!rawLine.trim()) return;
+      const cells = splitStudentDataCells(rawLine);
+      if (isStudentDataHeader(cells)) {
+        hasHeader = true;
+        return;
+      }
+      if (!hasHeader || !/^\d+$/.test(cells[0] || "")) return;
+      const number = Number(cells[0]);
+      if (number >= 1 && number <= 999) numbers.add(number);
+    });
+
+    return hasHeader ? Array.from(numbers).sort((left, right) => left - right) : [];
+  }
+
+  function formatNumberRanges(numbers) {
+    const ordered = Array.from(new Set((numbers || []).filter((number) => Number.isInteger(number) && number >= 1 && number <= 999)))
+      .sort((left, right) => left - right);
+    const ranges = [];
+    let start = null;
+    let end = null;
+
+    ordered.forEach((number) => {
+      if (start === null) {
+        start = number;
+        end = number;
+      } else if (number === end + 1) {
+        end = number;
+      } else {
+        ranges.push(start === end ? String(start) : `${start}-${end}`);
+        start = number;
+        end = number;
+      }
+    });
+    if (start !== null) ranges.push(start === end ? String(start) : `${start}-${end}`);
+    return ranges.join(", ");
+  }
+
+  function parseStudentRecords(input, students) {
+    const records = new Map();
+    const roster = students || [];
+    const validNumbers = new Set(roster.map((student) => student.number));
+    let sequentialIndex = 0;
+    let fieldHeaders = [];
+    let hasStructuredHeader = false;
+    let genderIndex = -1;
+    let fieldIndexes = [];
+
+    String(input || "").split(/\r?\n/).forEach((rawLine) => {
+      const line = rawLine.trim();
+      if (!line) return;
+      const cells = splitStudentDataCells(rawLine);
+      if (isStudentDataHeader(cells)) {
+        hasStructuredHeader = true;
+        records.genderHeader = cells.some((label, index) => index >= 2 && /^(?:性別|gender|sex)$/i.test(label));
+        genderIndex = cells.findIndex((label, index) => index >= 2 && /^(?:性別|gender|sex)$/i.test(label));
+        fieldIndexes = cells.map((_, index) => index).filter((index) => index >= 2 && index !== genderIndex);
+        fieldHeaders = fieldIndexes.map((sourceIndex, index) => cells[sourceIndex] || `${translated("studentData.field", { number: index + 1 }, "欄位 {number}")}`);
+        return;
+      }
+      if (/^\d+$/.test(cells[0] || "")) {
+        const number = Number(cells[0]);
+        if (!validNumbers.has(number)) return;
+        const name = String(cells[1] || "").trim().slice(0, 50);
+        const indexes = cells.map((_, index) => index).filter((index) => index >= 2 && index !== genderIndex);
+        const fields = indexes.map((sourceIndex, index) => ({
+          label: String(fieldHeaders[index] || translated("studentData.field", { number: index + 1 }, "欄位 {number}")).trim().slice(0, 30),
+          value: String(cells[sourceIndex] || "").trim().slice(0, 300)
+        })).filter((field) => field.value);
+        records.set(number, { number, name, gender: genderIndex >= 0 ? normalizeGender(cells[genderIndex]) : "", fields });
+        return;
+      }
+
+      // A spreadsheet row with an empty student number is not a name-only
+      // roster entry. Ignore stray values in later columns instead of assigning
+      // them sequentially to the next available student number.
+      if (hasStructuredHeader || rawLine.includes("\t") || /[，,]/.test(rawLine)) return;
+
+      while (sequentialIndex < roster.length && records.has(roster[sequentialIndex].number)) sequentialIndex += 1;
+      if (sequentialIndex < roster.length) {
+        const number = roster[sequentialIndex].number;
+        records.set(number, { number, name: line.slice(0, 50), fields: [] });
+        sequentialIndex += 1;
+      }
+    });
+    records.fieldHeaders = fieldHeaders.slice();
+    return records;
+  }
+
+  function parseStudentNames(input, students) {
+    const directory = new Map();
+    parseStudentRecords(input, students).forEach((record, number) => {
+      if (record.name) directory.set(number, record.name);
+    });
+    return directory;
+  }
+
+  function normalizeStudentData(input, students) {
+    const roster = students || [];
+    const records = parseStudentRecords(input, roster);
+    const fieldLabels = Array.isArray(records.fieldHeaders) ? records.fieldHeaders.slice() : [];
+    records.forEach((record) => record.fields.forEach((field) => {
+      if (!fieldLabels.includes(field.label)) fieldLabels.push(field.label);
+    }));
+    const orderedRecords = roster.map((student) => records.get(student.number)).filter(Boolean);
+    const hasGender = Boolean(records.genderHeader || orderedRecords.some((record) => record.gender));
+    if (!fieldLabels.length && !hasGender) return orderedRecords.map((record) => `${record.number}, ${record.name}`).join("\n");
+    const numberHeader = translated("studentData.number", {}, "座號");
+    const nameHeader = translated("studentData.name", {}, "姓名");
+    const genderHeader = translated("studentData.gender", {}, "性別");
+    const lines = [[numberHeader, nameHeader, ...(hasGender ? [genderHeader] : []), ...fieldLabels].join("\t")];
+    orderedRecords.forEach((record) => {
+      const values = new Map(record.fields.map((field) => [field.label, field.value]));
+      const gender = record.gender || "";
+      lines.push([record.number, record.name, ...(hasGender ? [gender === "male" ? translated("studentData.male", {}, "男") : gender === "female" ? translated("studentData.female", {}, "女") : ""] : []), ...fieldLabels.map((label) => values.get(label) || "")].join("\t"));
+    });
+    return lines.join("\n");
+  }
+
+  function normalizeStudentNames(input, students) {
+    return normalizeStudentData(input, students);
+  }
+
+  function secureRandomInt(maxExclusive) {
+    if (maxExclusive <= 1) return 0;
+    if (window.crypto && window.crypto.getRandomValues) {
+      const limit = Math.floor(0x100000000 / maxExclusive) * maxExclusive;
+      const data = new Uint32Array(1);
+      do window.crypto.getRandomValues(data); while (data[0] >= limit);
+      return data[0] % maxExclusive;
+    }
+    return Math.floor(Math.random() * maxExclusive);
+  }
+
+  function secureShuffle(items) {
+    const copy = items.slice();
+    for (let index = copy.length - 1; index > 0; index -= 1) {
+      const swapIndex = secureRandomInt(index + 1);
+      [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+    }
+    return copy;
+  }
+
+  function isCompatible(seat, student) {
+    return seat.type === "general" || seat.type === student.gender;
+  }
+
+  function nextSeatType(type) {
+    const index = SEAT_TYPES.indexOf(type);
+    return SEAT_TYPES[(index + 1 + SEAT_TYPES.length) % SEAT_TYPES.length];
+  }
+
+  const GENDER_PATTERNS = ["rows", "columns", "checkerboard", "tableSequence"];
+
+  function genderPatternParity(seat, pattern) {
+    if (pattern === "rows") return seat.row % 2;
+    if (pattern === "columns") return seat.col % 2;
+    if (pattern === "checkerboard") return (seat.row + seat.col) % 2;
+    throw new Error("Unsupported gender pattern");
+  }
+
+  function applyGenderPattern(config, seats, pattern, roomOrder) {
+    if (!GENDER_PATTERNS.includes(pattern)) throw new Error("Unsupported gender pattern");
+    const students = studentsRequiringSeats(config);
+    const studentByNumber = new Map(students.map((student) => [student.number, student]));
+    const usableCount = (seats || []).filter((seat) => seat.type !== "aisle").length;
+    const genderCounts = {
+      male: students.filter((student) => student.gender === "male").length,
+      female: students.filter((student) => student.gender === "female").length
+    };
+
+    function candidate(startGender) {
+      const otherGender = startGender === "male" ? "female" : "male";
+      const mapped = (seats || []).map((seat) => {
+        if (seat.type === "aisle") return { ...seat, pin: null };
+        const parity = pattern === "tableSequence" ? (roomOrder?.[seat.id]?.index || 0) % 2 : genderPatternParity(seat, pattern);
+        return { ...seat, type: parity ? otherGender : startGender };
+      });
+      const slotCounts = {
+        male: mapped.filter((seat) => seat.type === "male").length,
+        female: mapped.filter((seat) => seat.type === "female").length
+      };
+      const shortage = {
+        male: Math.max(0, genderCounts.male - slotCounts.male),
+        female: Math.max(0, genderCounts.female - slotCounts.female)
+      };
+      const pinConflicts = mapped.filter((seat) => {
+        if (!seat.pin) return false;
+        const student = studentByNumber.get(seat.pin);
+        return !student || !isCompatible(seat, student);
+      }).length;
+      return { mapped, shortage, score: (shortage.male + shortage.female) * 1000 + pinConflicts, startGender };
+    }
+
+    const maleFirst = candidate("male");
+    const femaleFirst = candidate("female");
+    const selected = femaleFirst.score < maleFirst.score ? femaleFirst : maleFirst;
+    let relaxedSeats = 0;
+
+    if (usableCount >= students.length) {
+      ["male", "female"].forEach((neededGender) => {
+        let remaining = selected.shortage[neededGender];
+        if (!remaining) return;
+        const replaceGender = neededGender === "male" ? "female" : "male";
+        selected.mapped
+          .filter((seat) => seat.type === replaceGender)
+          .sort((left, right) => {
+            const leftPinnedMatch = studentByNumber.get(left.pin)?.gender === neededGender ? 1 : 0;
+            const rightPinnedMatch = studentByNumber.get(right.pin)?.gender === neededGender ? 1 : 0;
+            return rightPinnedMatch - leftPinnedMatch || right.row - left.row || right.col - left.col;
+          })
+          .forEach((seat) => {
+            if (!remaining) return;
+            seat.type = "general";
+            remaining -= 1;
+            relaxedSeats += 1;
+          });
+      });
+    }
+
+    const clearedPins = [];
+    selected.mapped.forEach((seat) => {
+      if (!seat.pin) return;
+      const student = studentByNumber.get(seat.pin);
+      if (!student || !isCompatible(seat, student)) {
+        clearedPins.push(seat.pin);
+        seat.pin = null;
+      }
+    });
+
+    return { seats: selected.mapped, startGender: selected.startGender, relaxedSeats, clearedPins };
+  }
+
+  const ROOM_POSITIONS = [
+    "top-start", "top-center", "top-end",
+    "right-start", "right-center", "right-end",
+    "bottom-start", "bottom-center", "bottom-end",
+    "left-start", "left-center", "left-end",
+    "hidden"
+  ];
+
+  const CLOCKWISE_ROOM_POSITIONS = {
+    "top-start": "right-start",
+    "top-center": "right-center",
+    "top-end": "right-end",
+    "right-start": "bottom-end",
+    "right-center": "bottom-center",
+    "right-end": "bottom-start",
+    "bottom-start": "left-start",
+    "bottom-center": "left-center",
+    "bottom-end": "left-end",
+    "left-start": "top-end",
+    "left-center": "top-center",
+    "left-end": "top-start",
+    hidden: "hidden"
+  };
+
+  const COUNTERCLOCKWISE_ROOM_POSITIONS = Object.fromEntries(
+    Object.entries(CLOCKWISE_ROOM_POSITIONS).map(([position, rotatedPosition]) => [rotatedPosition, position])
+  );
+
+  function normalizeRoomPosition(value, fallback) {
+    return ROOM_POSITIONS.includes(value) ? value : fallback;
+  }
+
+  function rotateRoomPosition(value, direction, fallback) {
+    const position = normalizeRoomPosition(value, fallback);
+    if (direction === "clockwise") return CLOCKWISE_ROOM_POSITIONS[position];
+    if (direction === "counterclockwise") return COUNTERCLOCKWISE_ROOM_POSITIONS[position];
+    throw new Error("Unsupported rotation direction");
+  }
+
+  function rotateRoomOffset(value, position, direction) {
+    if (direction !== "clockwise" && direction !== "counterclockwise") throw new Error("Unsupported rotation direction");
+    const offset = clampInteger(value, -60, 60, 0);
+    const side = String(position || "").split("-")[0];
+    if (side === "hidden" || !offset) return offset;
+    if (direction === "clockwise") return side === "right" || side === "left" ? -offset : offset;
+    return side === "top" || side === "bottom" ? -offset : offset;
+  }
+
+  function normalizeConfig(config) {
+    const rows = clampInteger(config.rows, 1, 12, 8);
+    const cols = clampInteger(config.cols, 1, 12, 4);
+    const maxNumber = clampInteger(config.maxNumber, 1, 999, 34);
+    const displayMode = ["number", "name", "both"].includes(config.displayMode) ? config.displayMode : "number";
+    return {
+      className: String(config.className || (SeatMaster.i18n ? SeatMaster.i18n.t("common.untitled") : "未命名班級")).trim().slice(0, 30) || (SeatMaster.i18n ? SeatMaster.i18n.t("common.untitled") : "未命名班級"),
+      rows,
+      cols,
+      maxNumber,
+      emptyNumbers: String(config.emptyNumbers || "").trim(),
+      seatExcludedNumbers: formatNumberRanges(Array.from(parseEmptyNumbers(config.seatExcludedNumbers, maxNumber))),
+      femaleStart: clampInteger(config.femaleStart, 1, maxNumber + 1, Math.min(21, maxNumber + 1)),
+      displayMode,
+      studentData: String(config.studentData !== undefined ? config.studentData : config.studentNames || "").slice(0, 50000),
+      boardPosition: normalizeRoomPosition(config.boardPosition, "top-center"),
+      boardLength: clampInteger(config.boardLength, 1, 5, 3),
+      boardOffset: clampInteger(config.boardOffset, -60, 60, 0),
+      boardSize: clampInteger(config.boardSize, 1, 5, 3),
+      doorPosition: normalizeRoomPosition(config.doorPosition, "right-end"),
+      doorOffset: clampInteger(config.doorOffset, -60, 60, 0),
+      doorSize: clampInteger(config.doorSize, 1, 5, 3),
+      teacherPosition: normalizeRoomPosition(config.teacherPosition, "top-end"),
+      teacherOffset: clampInteger(config.teacherOffset, -60, 60, 0),
+      teacherSize: clampInteger(config.teacherSize, 1, 5, 3)
+    };
+  }
+
+  function buildSeatGrid(config, previousSeats) {
+    const byId = new Map((previousSeats || []).map((seat) => [seat.id, seat]));
+    const seats = [];
+    for (let row = 0; row < config.rows; row += 1) {
+      for (let col = 0; col < config.cols; col += 1) {
+        const id = `${row}-${col}`;
+        const previous = byId.get(id);
+        seats.push({
+          id,
+          row,
+          col,
+          type: previous && SEAT_TYPES.includes(previous.type) ? previous.type : "general",
+          pin: previous && Number.isInteger(previous.pin) ? previous.pin : null
+        });
+      }
+    }
+    return seats;
+  }
+
+  function rotateSeatLayout(config, seats, assignment, direction) {
+    const clockwise = direction === "clockwise";
+    const counterclockwise = direction === "counterclockwise";
+    if (!clockwise && !counterclockwise) throw new Error("Unsupported rotation direction");
+
+    const currentConfig = normalizeConfig(config);
+    const oldRows = currentConfig.rows;
+    const oldCols = currentConfig.cols;
+    const idMap = new Map();
+    const rotatedSeats = (seats || []).map((seat) => {
+      const row = clockwise ? seat.col : oldCols - 1 - seat.col;
+      const col = clockwise ? oldRows - 1 - seat.row : seat.row;
+      const id = `${row}-${col}`;
+      idMap.set(seat.id, id);
+      return { ...seat, id, row, col };
+    }).sort((left, right) => left.row - right.row || left.col - right.col);
+
+    const rotatedAssignment = {};
+    Object.entries(assignment || {}).forEach(([oldId, value]) => {
+      const newId = idMap.get(oldId);
+      if (newId) rotatedAssignment[newId] = value;
+    });
+
+    return {
+      config: {
+        ...currentConfig,
+        rows: oldCols,
+        cols: oldRows,
+        boardPosition: rotateRoomPosition(currentConfig.boardPosition, direction, "top-center"),
+        boardLength: currentConfig.boardLength,
+        boardOffset: rotateRoomOffset(currentConfig.boardOffset, currentConfig.boardPosition, direction),
+        boardSize: currentConfig.boardSize,
+        doorPosition: rotateRoomPosition(currentConfig.doorPosition, direction, "right-end"),
+        doorOffset: rotateRoomOffset(currentConfig.doorOffset, currentConfig.doorPosition, direction),
+        doorSize: currentConfig.doorSize,
+        teacherPosition: rotateRoomPosition(currentConfig.teacherPosition, direction, "top-end"),
+        teacherOffset: rotateRoomOffset(currentConfig.teacherOffset, currentConfig.teacherPosition, direction),
+        teacherSize: currentConfig.teacherSize
+      },
+      seats: rotatedSeats,
+      assignment: rotatedAssignment,
+      idMap
+    };
+  }
+
+  function validate(state) {
+    const students = studentsRequiringSeats(state.config);
+    const studentByNumber = new Map(students.map((student) => [student.number, student]));
+    const usableSeats = state.seats.filter((seat) => seat.type !== "aisle");
+    const errors = [];
+    const pinned = new Set();
+
+    state.seats.forEach((seat) => {
+      if (!seat.pin) return;
+      const student = studentByNumber.get(seat.pin);
+      if (seat.type === "aisle") errors.push(translated("validation.aislePin", { number: seat.pin }, "走道位置不能固定 {number} 號。"));
+      else if (!student) errors.push(translated("validation.notInRoster", { number: seat.pin }, "{number} 號不在目前有效名單中。"));
+      else if (!isCompatible(seat, student)) errors.push(translated("validation.genderMismatch", { number: seat.pin }, "{number} 號與固定座位的性別條件不符。"));
+      if (pinned.has(seat.pin)) errors.push(translated("validation.duplicatePin", { number: seat.pin }, "{number} 號被固定在兩個以上的位置。"));
+      pinned.add(seat.pin);
+    });
+
+    if (usableSeats.length < students.length) {
+      errors.push(translated("validation.capacity", { seats: usableSeats.length, students: students.length }, "可用座位只有 {seats} 席，少於 {students} 位學生。"));
+    }
+
+    const unpinnedMale = students.filter((student) => student.gender === "male" && !pinned.has(student.number)).length;
+    const unpinnedFemale = students.filter((student) => student.gender === "female" && !pinned.has(student.number)).length;
+    const openGeneral = usableSeats.filter((seat) => seat.type === "general" && !seat.pin).length;
+    const openMale = usableSeats.filter((seat) => seat.type === "male" && !seat.pin).length;
+    const openFemale = usableSeats.filter((seat) => seat.type === "female" && !seat.pin).length;
+
+    if (Math.max(0, unpinnedMale - openMale) + Math.max(0, unpinnedFemale - openFemale) > openGeneral) {
+      errors.push(translated("validation.generalCapacity", {}, "不限性別座位不足，無法容納限制座位分配後的學生。"));
+    }
+
+    return { valid: errors.length === 0, errors, students, usableSeats };
+  }
+
+  function arrange(state) {
+    const report = validate(state);
+    if (!report.valid) {
+      const error = new Error(report.errors.join("\n"));
+      error.details = report.errors;
+      throw error;
+    }
+
+    const assignment = {};
+    const assignedNumbers = new Set();
+    state.seats.forEach((seat) => {
+      if (seat.pin) {
+        assignment[seat.id] = seat.pin;
+        assignedNumbers.add(seat.pin);
+      }
+    });
+
+    const available = report.students.filter((student) => !assignedNumbers.has(student.number));
+    const maleStudents = secureShuffle(available.filter((student) => student.gender === "male"));
+    const femaleStudents = secureShuffle(available.filter((student) => student.gender === "female"));
+    const maleSeats = secureShuffle(state.seats.filter((seat) => seat.type === "male" && !seat.pin));
+    const femaleSeats = secureShuffle(state.seats.filter((seat) => seat.type === "female" && !seat.pin));
+    const generalSeats = secureShuffle(state.seats.filter((seat) => seat.type === "general" && !seat.pin));
+
+    while (maleStudents.length && maleSeats.length) assignment[maleSeats.pop().id] = maleStudents.pop().number;
+    while (femaleStudents.length && femaleSeats.length) assignment[femaleSeats.pop().id] = femaleStudents.pop().number;
+
+    const remainingStudents = secureShuffle([...maleStudents, ...femaleStudents]);
+    while (remainingStudents.length && generalSeats.length) assignment[generalSeats.pop().id] = remainingStudents.pop().number;
+
+    state.seats.forEach((seat) => {
+      if (seat.type !== "aisle" && assignment[seat.id] === undefined) assignment[seat.id] = null;
+    });
+    return assignment;
+  }
+
+  function pickStudents(config, count, excludedNumbers) {
+    const excluded = new Set(excludedNumbers || []);
+    const pool = buildStudents(config).filter((student) => !excluded.has(student.number));
+    if (!Number.isInteger(count) || count < 1 || count > pool.length) throw new RangeError("Invalid student draw count");
+    return secureShuffle(pool).slice(0, count).map((student) => student.number);
+  }
+
+  SeatMaster.engine = {
+    pickStudents,
+    clampInteger,
+    parseEmptyNumbers,
+    inferStudentNumbers,
+    formatNumberRanges,
+    buildStudents,
+    studentsRequiringSeats,
+    normalizeGender,
+    parseStudentRecords,
+    parseStudentNames,
+    normalizeStudentData,
+    normalizeStudentNames,
+    secureShuffle,
+    isCompatible,
+    nextSeatType,
+    GENDER_PATTERNS,
+    genderPatternParity,
+    applyGenderPattern,
+    ROOM_POSITIONS,
+    normalizeRoomPosition,
+    rotateRoomPosition,
+    rotateRoomOffset,
+    normalizeConfig,
+    buildSeatGrid,
+    rotateSeatLayout,
+    validate,
+    arrange
+  };
+})();

@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Classroom Seat Master｜班級座位編排</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23174f3c'/%3E%3Cpath d='M18 18h28v9H27v10h19v9H18z' fill='%23fff'/%3E%3Ccircle cx='46' cy='18' r='7' fill='%23e77732'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <nav class="home-navigation" aria-label="首頁導覽" data-i18n-aria-label="home.navigation">
+      <button id="homeButton" class="home-button" type="button" data-go-home><span aria-hidden="true">⌂</span><span id="homeButtonText" data-i18n="home.back">回首頁</span></button>
+    </nav>
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">CM</span>
+        <div>
+          <p class="eyebrow">CLASSROOM SEAT MASTER</p>
+          <h1 id="pageTitle">班級座位編排</h1>
+        </div>
+      </div>
+      <div class="header-actions admin-only">
+        <span class="save-status" id="saveStatus" aria-live="polite" data-i18n="common.saved">已儲存於本機</span>
+        <button class="button button-secondary language-button" type="button"><span data-language-label>EN</span></button>
+        <button class="button button-secondary" id="fullscreenButton" type="button" data-i18n="common.fullscreen">全螢幕</button>
+        <button class="button button-secondary student-draw-open" type="button" data-i18n="picker.title">抽學生</button>
+        <button class="button button-secondary" id="groupPlannerOpen" type="button" data-i18n="groups.open">任務分組</button>
+        <button class="button button-secondary" id="manualStartButton" type="button" data-i18n="mode.manual">全手動排位</button>
+        <button class="button button-primary" id="presentationButton" type="button" data-i18n="common.startPresentation">點此開始展示</button>
+      </div>
+      <div class="header-actions presentation-only">
+        <button class="button button-secondary student-draw-open" type="button" data-i18n="picker.title">抽學生</button>
+        <button class="button button-secondary language-button" type="button"><span data-language-label>EN</span></button>
+        <button class="button button-secondary sound-button" id="soundButton" type="button" aria-pressed="true">
+          <span aria-hidden="true">♪</span>
+          <span id="soundButtonText">音效開啟</span>
+        </button>
+        <div class="presentation-rotation" role="group" aria-label="旋轉整間教室" data-i18n-aria-label="admin.rotateLayout">
+          <button class="button button-secondary presentation-rotate-button" id="presentationRotateCounterclockwiseButton" type="button">
+            <span aria-hidden="true">↶</span><span class="visually-hidden" data-i18n="admin.rotateCounterclockwise">逆時針 90°</span>
+          </button>
+          <button class="button button-secondary presentation-rotate-button" id="presentationRotateClockwiseButton" type="button">
+            <span aria-hidden="true">↷</span><span class="visually-hidden" data-i18n="admin.rotateClockwise">順時針 90°</span>
+          </button>
+        </div>
+        <button class="button button-secondary" id="presentationFullscreenButton" type="button" data-i18n="common.fullscreen">全螢幕</button>
+        <button class="button button-quiet" id="adminButton" type="button" data-i18n="common.returnAdmin">返回維護後台</button>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <aside id="manualPanel" class="manual-panel panel-section admin-only" aria-labelledby="manualTitle" hidden>
+        <h2 id="manualTitle" data-i18n="mode.manual">全手動排位</h2>
+        <p id="manualProgress" aria-live="polite"></p>
+        <progress id="manualProgressBar" aria-label="排位進度" data-i18n-aria-label="manual.progressLabel" max="1" value="0"></progress>
+        <details class="manual-rules"><summary data-i18n="manual.rulesTitle">手動排位說明</summary><p class="manual-instructions" data-i18n="manual.instructions">選學生 → 點座位。也可拖曳；點已排學生可移動或交換。</p><p class="manual-rules-note" data-i18n="manual.rulesNote">沿用目前結果或預排位置起步。手動排位由老師決定，不套用抽籤的性別與固定限制；走道不能坐人。</p></details>
+        <p id="manualCapacity" class="manual-capacity" role="alert" hidden></p>
+        <label class="field"><span class="visually-hidden" data-i18n="manual.search">搜尋座號或姓名</span><input id="manualSearch" type="search" autocomplete="off" placeholder="搜尋座號／姓名" data-i18n-placeholder="manual.search" /></label>
+        <div class="manual-filters" role="group" aria-label="名單篩選" data-i18n-aria-label="manual.filterLabel">
+          <button type="button" data-manual-filter="pending" aria-pressed="true" data-i18n="manual.pending">待排學生</button>
+          <button type="button" data-manual-filter="all" aria-pressed="false" data-i18n="manual.all">全班名單</button>
+        </div>
+        <div id="manualStudents" class="manual-students"></div>
+        <h3 class="manual-subheading" data-i18n="manual.nonSeatHeading">不需實體座位</h3>
+        <div id="manualNonSeatStudents" class="manual-students non-seat-roster"></div>
+        <div class="manual-selection">
+          <strong id="manualCurrent" aria-live="polite"></strong>
+          <label class="manual-auto"><input id="manualAutoNext" type="checkbox" checked /><span data-i18n="manual.autoNext">排好後自動選下一位</span></label>
+          <div class="manual-tools">
+            <button id="manualUnseatButton" class="button button-secondary" type="button" data-i18n="manual.unseat">移回待排</button>
+            <button id="manualCancelSelection" class="button button-secondary" type="button" data-i18n="manual.cancelSelection">取消選取</button>
+            <button id="manualUndoButton" class="button button-secondary" type="button" data-i18n="manual.undo">復原</button>
+            <button id="manualRedoButton" class="button button-secondary" type="button" data-i18n="manual.redo">重做</button>
+          </div>
+          <p id="manualFeedback" class="manual-feedback" role="status" aria-live="polite" data-i18n="manual.saved">草稿自動儲存，可隨時回來繼續。</p>
+          <button id="manualFinishButton" class="button button-primary" type="button" data-i18n="manual.finish">完成並展示</button>
+          <button id="manualClearButton" class="button button-quiet" type="button" data-i18n="manual.clear">全部移回待排</button>
+        </div>
+      </aside>
+      <aside class="control-panel admin-only" aria-label="座位設定">
+        <section class="panel-section class-manager" aria-labelledby="classManagerTitle">
+          <div class="section-heading">
+            <div>
+              <p class="step-label" data-i18n="classes.eyebrow">班級管理</p>
+              <h2 id="classManagerTitle" data-i18n="classes.title">目前班級</h2>
+            </div>
+            <span id="classCount" class="class-count">1 個班級</span>
+          </div>
+          <label class="field field-wide">
+            <span data-i18n="classes.choose">切換目前呈現的班級</span>
+            <select id="classSelector" aria-label="切換目前呈現的班級"></select>
+          </label>
+          <div class="class-actions">
+            <button class="button button-primary" id="addClassButton" type="button" data-i18n="classes.add">新增班級</button>
+            <button class="button button-secondary" id="duplicateClassButton" type="button" data-i18n="classes.duplicate">複製目前班級</button>
+            <button class="button button-quiet" id="deleteClassButton" type="button" data-i18n="classes.delete">刪除目前班級</button>
+          </div>
+          <small data-i18n="classes.help">每個班級各自保留名單、版型與抽籤結果；匯出會包含全部班級。</small>
+        </section>
+        <section class="panel-section">
+          <div class="section-heading">
+            <div>
+              <p class="step-label" data-i18n="admin.basic">基本資料</p>
+              <h2 data-i18n="admin.classAndStudents">班級與人數</h2>
+            </div>
+            <span class="section-number">01</span>
+          </div>
+
+          <label class="field field-wide">
+            <span data-i18n="admin.className">班級名稱</span>
+            <input id="classNameInput" type="text" maxlength="30" value="601 班" />
+            <small data-i18n="admin.classNameHelp">可輸入任意班級名稱，標題與匯出檔名會自動同步。</small>
+          </label>
+
+          <div class="field-grid">
+            <label class="field">
+              <span data-i18n="admin.maxNumber">最大座號</span>
+              <input id="maxNumberInput" type="number" min="1" max="999" value="34" />
+            </label>
+            <label class="field">
+              <span data-i18n="admin.femaleStart">女生起始座號</span>
+              <input id="femaleStartInput" type="number" min="1" max="999" value="21" />
+            </label>
+          </div>
+
+          <label class="field field-wide">
+            <span data-i18n="admin.emptyNumbers">缺號／空號</span>
+            <input id="emptyNumbersInput" type="text" value="16-20" placeholder="例：16-20, 25" data-i18n-placeholder="admin.emptyPlaceholder" />
+            <small data-i18n="admin.emptyHelp">支援逗號、空白與區間，例如 16-20, 25</small>
+          </label>
+
+          <label class="field field-wide">
+            <span data-i18n="admin.noPhysicalSeat">不需實體座位（座號）</span>
+            <input id="seatExcludedNumbersInput" type="text" value="" placeholder="例：3, 8-10" data-i18n-placeholder="admin.noPhysicalSeatPlaceholder" />
+            <small data-i18n="admin.noPhysicalSeatHelp">這些學生仍保留在名單並可參加抽學生／任務分組，但不占用教室座位。</small>
+          </label>
+
+          <label class="field field-wide">
+            <span data-i18n="admin.displayContent">展示內容</span>
+            <select id="displayModeInput">
+              <option value="number" data-i18n="admin.numberOnly">只顯示座號</option>
+              <option value="name" data-i18n="admin.nameOnly">只顯示姓名</option>
+              <option value="both" data-i18n="admin.numberAndName">座號＋姓名</option>
+            </select>
+          </label>
+
+          <label class="field field-wide">
+            <span data-i18n="admin.studentData">學生資料（選填）</span>
+            <textarea id="studentDataInput" rows="7" placeholder="座號　姓名　外號　帳號　密碼　居住地點" data-i18n-placeholder="admin.dataPlaceholder"></textarea>
+            <small data-i18n="admin.dataHelp">第一列填欄名，可直接貼上 Excel；姓名後方可增加任意資料欄位。</small>
+            <small class="privacy-note" data-i18n="admin.dataPrivacy">資料會在展示模式點擊學生卡牌後顯示；密碼類欄位預設遮罩，請仍避免輸入不應公開的敏感資訊。</small>
+          </label>
+
+          <div class="student-summary" id="studentSummary" aria-live="polite"></div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading">
+            <div>
+              <p class="step-label" data-i18n="admin.space">空間配置</p>
+              <h2 data-i18n="admin.grid">教室網格</h2>
+            </div>
+            <span class="section-number">02</span>
+          </div>
+
+          <div class="field-grid" id="gridDimensions">
+            <label class="field">
+              <span data-i18n="admin.columns">直行數</span>
+              <input id="colsInput" type="number" min="1" max="12" value="4" />
+            </label>
+            <label class="field">
+              <span data-i18n="admin.rows">橫排數</span>
+              <input id="rowsInput" type="number" min="1" max="12" value="8" />
+            </label>
+          </div>
+
+          <div class="layout-rotation">
+            <div>
+              <strong data-i18n="admin.rotateLayout">旋轉整間教室</strong>
+              <small data-i18n="admin.rotateHelp">每次旋轉 90°；學生座位、黑板、門與老師座位會一起轉，座位屬性、預排與抽籤結果都會保留。</small>
+            </div>
+            <div class="rotation-buttons">
+              <button class="button button-secondary" id="rotateCounterclockwiseButton" type="button">
+                <span aria-hidden="true">↶</span><span data-i18n="admin.rotateCounterclockwise">逆時針 90°</span>
+              </button>
+              <button class="button button-secondary" id="rotateClockwiseButton" type="button">
+                <span data-i18n="admin.rotateClockwise">順時針 90°</span><span aria-hidden="true">↷</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="room-template-tools">
+            <strong data-i18n="room.templates">教室版型</strong>
+            <div class="room-template-buttons">
+              <button class="button button-secondary" type="button" data-room-template="grid" data-i18n="room.templateGrid">矩形網格</button>
+              <button class="button button-secondary" type="button" data-room-template="islands" data-i18n="room.templateIslands">島型小組桌</button>
+              <button class="button button-secondary" type="button" data-room-template="round" data-i18n="room.templateRound">圓桌</button>
+              <button class="button button-secondary" type="button" data-room-template="u" data-i18n="room.templateU">U 型教室</button>
+              <button class="button button-secondary" id="roomUndoButton" type="button" data-i18n="room.undo" disabled>復原桌位編輯</button>
+              <button class="button button-secondary" id="roomRedoButton" type="button" data-i18n="room.redo" disabled>重做桌位編輯</button>
+            </div>
+            <div id="roomLayoutToolbar" class="room-layout-toolbar" hidden>
+              <div class="room-editor-intro">
+                <label class="room-edit-toggle"><input id="roomEditToggle" type="checkbox"><span data-i18n="room.editLayout">編輯桌組與動線</span></label>
+                <p data-i18n="room.editorHelp">開啟後，點選畫布中的桌組、座位或通道，再在下方調整；也可直接拖曳。</p>
+              </div>
+              <div class="room-editor-actions">
+                <button id="roomAddTable" class="button button-primary" type="button" data-i18n="room.addTable">新增 4 人桌</button>
+                <button id="roomAddPath" class="button button-secondary" type="button" data-i18n="room.addPath">新增輪椅／主要通道</button>
+                <button id="roomZoomReset" class="button button-secondary" type="button" data-i18n="room.zoomReset">重設視圖</button>
+              </div>
+              <section id="roomSelectedTablePanel" class="room-editor-card">
+                <div class="room-editor-card-heading"><strong id="roomEditorSelection" data-i18n="room.noSelection">請先點選一張桌組</strong><span data-i18n="room.tableSettings">桌組設定</span></div>
+                <div class="room-editor-fields">
+                  <label class="room-edit-toggle"><span data-i18n="room.tableShape">選取桌型</span><select id="roomTableTypeSelect"><option value="rect" data-i18n="room.shapeRect">矩形桌</option><option value="round" data-i18n="room.shapeRound">圓桌</option><option value="u" data-i18n="room.shapeU">U 型桌</option></select></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.seatCount">每桌座位數</span><input id="roomSeatCountInput" type="number" min="1" max="60" value="4"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.tableX">桌組 X</span><input id="roomTableXInput" type="number" min="5" max="95" value="50"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.tableY">桌組 Y</span><input id="roomTableYInput" type="number" min="8" max="92" value="50"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.tableWidth">桌寬 %</span><input id="roomTableWidthInput" type="number" min="18" max="80" value="30"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.tableHeight">桌高 %</span><input id="roomTableHeightInput" type="number" min="18" max="80" value="30"></label>
+                </div>
+                <div class="room-editor-actions compact-actions">
+                  <button id="roomAddSeat" class="button button-secondary" type="button" data-i18n="room.addSeat">為選取桌加座位</button>
+                  <button id="roomRemoveSeat" class="button button-secondary" type="button" data-i18n="room.removeSeat">移除選取桌末位</button>
+                  <button id="roomAutoArrangeSeats" class="button button-secondary" type="button" data-i18n="room.autoArrangeSeats">自動排列此桌座位</button>
+                  <button id="roomRotateLeft" class="button button-secondary" type="button" data-i18n="room.rotateLeft">左轉 15°</button>
+                  <button id="roomRotateRight" class="button button-secondary" type="button" data-i18n="room.rotateRight">右轉 15°</button>
+                  <button id="roomDuplicateTable" class="button button-secondary" type="button" data-i18n="room.duplicate">複製桌組</button>
+                </div>
+                <div class="room-editor-fields room-shape-options">
+                  <label class="room-edit-toggle" id="roomUOpeningControl"><span data-i18n="room.opening">U 型開口</span><select id="roomUOpeningSelect"><option value="bottom" data-i18n="room.openBottom">朝下</option><option value="top" data-i18n="room.openTop">朝上</option><option value="left" data-i18n="room.openLeft">朝左</option><option value="right" data-i18n="room.openRight">朝右</option></select></label>
+                  <label class="room-edit-toggle" id="roomRoundRadiusControl"><span data-i18n="room.roundRadius">圓桌座位半徑</span><input id="roomRoundRadiusInput" type="range" min="28" max="49" value="44"></label>
+                </div>
+                <div id="roomEdgeControls" class="room-edge-controls">
+                  <label><span data-i18n="room.edgeTop">上邊</span><input id="roomEdgeTopInput" data-room-edge="top" type="number" min="0" max="60"></label>
+                  <label><span data-i18n="room.edgeRight">右邊</span><input id="roomEdgeRightInput" data-room-edge="right" type="number" min="0" max="60"></label>
+                  <label><span data-i18n="room.edgeBottom">下邊</span><input id="roomEdgeBottomInput" data-room-edge="bottom" type="number" min="0" max="60"></label>
+                  <label><span data-i18n="room.edgeLeft">左邊</span><input id="roomEdgeLeftInput" data-room-edge="left" type="number" min="0" max="60"></label>
+                </div>
+                <button id="roomDeleteTable" class="button button-danger room-delete-button" type="button" data-i18n="room.delete">刪除選取桌</button>
+              </section>
+              <section id="roomSelectedSeatPanel" class="room-editor-card" hidden>
+                <div class="room-editor-card-heading"><strong data-i18n="room.seatSettings">選取座位</strong></div>
+                <div class="room-editor-fields"><label class="room-edit-toggle"><span data-i18n="room.seatX">選取座位 X</span><input id="roomSeatXInput" type="number" min="2" max="98" step="1" disabled></label><label class="room-edit-toggle"><span data-i18n="room.seatY">Y</span><input id="roomSeatYInput" type="number" min="2" max="98" step="1" disabled></label><label class="room-edit-toggle"><span data-i18n="room.seatWidth">椅子寬</span><input id="roomSeatWidthInput" type="number" min="24" max="80" step="1" disabled></label><label class="room-edit-toggle"><span data-i18n="room.seatHeight">椅子高</span><input id="roomSeatHeightInput" type="number" min="20" max="64" step="1" disabled></label></div>
+              </section>
+              <section id="roomSelectedPathPanel" class="room-editor-card" hidden>
+                <div class="room-editor-card-heading"><strong data-i18n="room.pathSettings">主要通道</strong><span data-i18n="room.pathSettingsHint">保留不放桌組的空間</span></div>
+                <div class="room-editor-fields">
+                  <label class="room-edit-toggle room-field-wide"><span data-i18n="room.pathName">名稱</span><input id="roomPathLabelInput" type="text" maxlength="40"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.pathX">通道 X</span><input id="roomPathXInput" type="number" min="0" max="95"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.pathY">通道 Y</span><input id="roomPathYInput" type="number" min="0" max="95"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.pathWidth">通道寬度</span><input id="roomPathWidthInput" type="number" min="3" max="40"></label>
+                  <label class="room-edit-toggle"><span data-i18n="room.pathHeight">通道高度</span><input id="roomPathHeightInput" type="number" min="3" max="40"></label>
+                </div>
+                <button id="roomDeletePath" class="button button-danger room-delete-button" type="button" data-i18n="room.deletePath">刪除這條通道</button>
+              </section>
+              <section id="roomCanvasControlPanel" class="room-editor-card room-canvas-controls">
+                <label class="path-width-control"><span data-i18n="room.zoom">畫布縮放</span><input id="roomZoomInput" type="range" min="60" max="150" value="100"><output id="roomZoomOutput">100%</output></label>
+              </section>
+            </div>
+            <p id="roomGeometryStatus" class="room-geometry-status" role="status"></p>
+            <small class="room-geometry-help" data-i18n="room.geometryHelp">調整桌型、開口、各邊座位數或自動排列，會重排該桌座位；手動位置可用復原還原。</small>
+            <small data-i18n="room.templateHelp">版型可拖曳桌組；通道以獨立區域表示，不會產生座位。桌面拖曳外，亦可用工具列旋轉與複製。</small>
+          </div>
+
+          <div class="gender-patterns">
+            <div class="gender-pattern-heading">
+              <strong data-i18n="admin.genderPatterns">男女交錯快速配置</strong>
+              <small data-i18n="admin.genderPatternsHelp">一鍵套用男女座位限制；走道會保留，人數不平均時會自動留下必要的不限座位。</small>
+            </div>
+            <div class="gender-pattern-buttons">
+              <button class="gender-pattern-button" type="button" data-gender-pattern="tableSequence" hidden>
+                <span class="gender-pattern-preview pattern-rows" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                <span data-i18n="admin.genderTableSequence">各桌依座位順序交錯</span>
+              </button>
+              <button class="gender-pattern-button" type="button" data-gender-pattern="rows">
+                <span class="gender-pattern-preview pattern-rows" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                <span data-i18n="admin.genderRows">橫排交錯</span>
+              </button>
+              <button class="gender-pattern-button" type="button" data-gender-pattern="columns">
+                <span class="gender-pattern-preview pattern-columns" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                <span data-i18n="admin.genderColumns">直行交錯</span>
+              </button>
+              <button class="gender-pattern-button" type="button" data-gender-pattern="checkerboard">
+                <span class="gender-pattern-preview pattern-checkerboard" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                <span data-i18n="admin.genderCheckerboard">棋盤交錯</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="room-marker-settings">
+            <div class="room-marker-heading">
+              <strong data-i18n="admin.roomMarkers">教室標記位置</strong>
+              <small data-i18n="admin.roomMarkersHelp">黑板、門與老師座位可各自放在教室四周，也可隱藏。</small>
+            </div>
+            <div class="room-marker-fields">
+              <div class="room-marker-control">
+                <label class="field">
+                  <span data-i18n="admin.boardPosition">黑板</span>
+                  <select id="boardPositionInput" data-room-position-select></select>
+                </label>
+                <label class="field range-field">
+                  <span class="range-label"><span data-i18n="admin.boardLength">黑板長度</span><output id="boardLengthOutput" for="boardLengthInput">3 / 5</output></span>
+                  <input id="boardLengthInput" type="range" min="1" max="5" step="1" value="3" />
+                </label>
+                <label class="field range-field">
+                  <span class="range-label"><span data-i18n="admin.positionFineTune">位置微調</span><output id="boardOffsetOutput" for="boardOffsetInput">0 px</output></span>
+                  <input id="boardOffsetInput" type="range" min="-60" max="60" step="1" value="0" />
+                </label>
+                <label class="field range-field">
+                  <span class="range-label"><span data-i18n="admin.markerSize">標記大小</span><output id="boardSizeOutput" for="boardSizeInput">3 / 5</output></span>
+                  <input id="boardSizeInput" type="range" min="1" max="5" step="1" value="3" />
+                </label>
+              </div>
+              <div class="room-marker-control">
+                <label class="field">
+                  <span data-i18n="admin.doorPosition">門</span>
+                  <select id="doorPositionInput" data-room-position-select></select>
+                </label>
+                <label class="field range-field">
+                  <span class="range-label"><span data-i18n="admin.positionFineTune">位置微調</span><output id="doorOffsetOutput" for="doorOffsetInput">0 px</output></span>
+                  <input id="doorOffsetInput" type="range" min="-60" max="60" step="1" value="0" />
+                </label>
+                <label class="field range-field">
+                  <span class="range-label"><span data-i18n="admin.markerSize">標記大小</span><output id="doorSizeOutput" for="doorSizeInput">3 / 5</output></span>
+                  <input id="doorSizeInput" type="range" min="1" max="5" step="1" value="3" />
+                </label>
+              </div>
+              <div class="room-marker-control">
+                <label class="field">
+                  <span data-i18n="admin.teacherPosition">老師座位</span>
+                  <select id="teacherPositionInput" data-room-position-select></select>
+                </label>
+                <label class="field range-field">
+                  <span class="range-label"><span data-i18n="admin.positionFineTune">位置微調</span><output id="teacherOffsetOutput" for="teacherOffsetInput">0 px</output></span>
+                  <input id="teacherOffsetInput" type="range" min="-60" max="60" step="1" value="0" />
+                </label>
+                <label class="field range-field">
+                  <span class="range-label"><span data-i18n="admin.markerSize">標記大小</span><output id="teacherSizeOutput" for="teacherSizeInput">3 / 5</output></span>
+                  <input id="teacherSizeInput" type="range" min="1" max="5" step="1" value="3" />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="legend" aria-label="座位狀態圖例">
+            <span><i class="legend-dot general"></i><b data-i18n="seat.generalShort">不限</b></span>
+            <span><i class="legend-dot male"></i><b data-i18n="seat.maleShort">男生</b></span>
+            <span><i class="legend-dot female"></i><b data-i18n="seat.femaleShort">女生</b></span>
+            <span><i class="legend-dot aisle"></i><b data-i18n="seat.aisleShort">走道</b></span>
+          </div>
+
+          <p class="hint-box" data-i18n="admin.gridHelp">行數、排數可隨時增減，變更後會自動重建網格並保留仍存在的座位設定。點座位切換四種狀態；點右上角可固定座號，點外圍標籤可整批切換。</p>
+        </section>
+
+        <section class="panel-section compact-section">
+          <div class="section-heading">
+            <div>
+              <p class="step-label" data-i18n="admin.dataTools">資料工具</p>
+              <h2 data-i18n="admin.backupReset">備份與重設</h2>
+            </div>
+            <span class="section-number">03</span>
+          </div>
+          <div class="tool-grid">
+            <button class="button button-secondary" id="exportButton" type="button" data-i18n="admin.export">匯出設定</button>
+            <button class="button button-secondary" id="importButton" type="button" data-i18n="admin.import">匯入設定</button>
+            <button class="button button-secondary" id="clearPinsButton" type="button" data-i18n="admin.clearPins">清除固定</button>
+            <button class="button button-danger" id="resetButton" type="button" data-i18n="admin.reset">恢復預設</button>
+          </div>
+          <input id="importFileInput" type="file" accept="application/json,.json" hidden />
+        </section>
+      </aside>
+
+      <section class="classroom-stage" aria-label="教室座位圖">
+        <div class="presentation-decor presentation-only" aria-hidden="true">
+          <span class="aurora aurora-one"></span>
+          <span class="aurora aurora-two"></span>
+          <span class="spark spark-one">✦</span>
+          <span class="spark spark-two">✦</span>
+          <span class="spark spark-three">·</span>
+        </div>
+        <div class="stage-heading">
+          <div>
+            <p class="step-label admin-only" data-i18n="stage.preview">即時預覽</p>
+            <h2 id="stageTitle">601 班座位表</h2>
+            <p class="stage-subtitle admin-only" id="stageSubtitle">32 席 · 29 位學生 · 3 張空桌</p>
+            <p class="stage-subtitle presentation-only" data-i18n="stage.draw">座位抽籤</p>
+          </div>
+          <div class="status-key admin-only">
+            <span id="capacityBadge">容量充足</span>
+          </div>
+        </div>
+
+        <div class="admin-mode-bar admin-only" aria-label="管理模式">
+          <div class="mode-tabs" role="tablist">
+            <button class="mode-tab is-active" type="button" data-admin-mode="layout" role="tab" aria-selected="true" data-i18n="mode.layout">首頁／座位設定</button>
+            <button class="mode-tab" type="button" data-admin-mode="prearrange" role="tab" aria-selected="false" data-i18n="mode.prearrange">事先安排</button>
+            <button class="mode-tab" type="button" data-admin-mode="manual" role="tab" aria-selected="false" data-i18n="mode.manual">全手動排位</button>
+            <button class="mode-tab" id="adjustModeButton" type="button" data-admin-mode="adjust" role="tab" aria-selected="false" data-i18n="mode.adjust" disabled>調整結果</button>
+          </div>
+          <div class="mode-guidance">
+            <p id="adminModeHelp">點擊座位可切換不限、男生、女生與走道。</p>
+            <span id="prearrangeCount">已預排 0 人</span>
+          </div>
+        </div>
+
+        <div class="room-layout" id="roomLayout">
+          <div class="room-edge room-edge-top">
+            <div class="room-slot" data-room-slot="top-start"></div>
+            <div class="room-slot" data-room-slot="top-center"></div>
+            <div class="room-slot" data-room-slot="top-end"></div>
+          </div>
+          <div class="room-edge room-edge-left">
+            <div class="room-slot" data-room-slot="left-start"></div>
+            <div class="room-slot" data-room-slot="left-center"></div>
+            <div class="room-slot" data-room-slot="left-end"></div>
+          </div>
+          <div class="grid-scroll">
+            <div id="seatGrid" class="seat-grid" aria-label="座位配置網格"></div>
+          </div>
+          <div class="room-edge room-edge-right">
+            <div class="room-slot" data-room-slot="right-start"></div>
+            <div class="room-slot" data-room-slot="right-center"></div>
+            <div class="room-slot" data-room-slot="right-end"></div>
+          </div>
+          <div class="room-edge room-edge-bottom">
+            <div class="room-slot" data-room-slot="bottom-start"></div>
+            <div class="room-slot" data-room-slot="bottom-center"></div>
+            <div class="room-slot" data-room-slot="bottom-end"></div>
+          </div>
+        </div>
+
+        <div class="draw-panel presentation-only">
+          <p id="drawMessage" data-i18n="draw.ready">按下按鈕，開始公平隨機排位</p>
+          <button class="draw-button" id="drawButton" type="button">
+            <span class="draw-icon" aria-hidden="true">↻</span>
+            <span id="drawButtonText" data-i18n="draw.start">開始抽籤</span>
+          </button>
+          <button class="button button-secondary" id="skipDrawButton" type="button" data-i18n="draw.skip" hidden>直接揭曉</button>
+        </div>
+
+        <div id="drawSpotlight" class="draw-spotlight" aria-hidden="true"></div>
+        <div id="drawCountdown" class="draw-countdown presentation-only" aria-live="polite" aria-atomic="true">
+          <p class="countdown-caption" data-i18n="draw.getReady">全班注意，座位即將揭曉</p>
+          <span id="drawCountdownText">3</span>
+        </div>
+        <div id="celebrationLayer" class="celebration-layer presentation-only" aria-hidden="true"></div>
+      </section>
+    </main>
+
+    <dialog id="studentDrawDialog" class="student-draw-dialog" aria-labelledby="studentDrawTitle">
+      <div class="student-draw-shell">
+        <header class="student-draw-header">
+          <div><p class="step-label" id="studentDrawClass"></p><h2 id="studentDrawTitle" data-i18n="picker.title">抽學生</h2></div>
+          <div class="student-draw-actions">
+            <button class="button button-secondary" type="button" data-go-home data-i18n="home.back">回首頁</button>
+            <button id="studentDrawSound" class="button button-secondary" type="button" aria-pressed="true"></button>
+            <button id="studentDrawClose" class="button button-secondary" type="button" data-i18n="picker.close">關閉</button>
+          </div>
+        </header>
+        <div class="student-draw-settings">
+          <label><span data-i18n="picker.count">一次抽幾位</span><input id="studentDrawCount" type="number" min="1" max="999" step="1" value="1" required /></label>
+          <label class="picker-repeat"><input id="studentDrawNoRepeat" type="checkbox" checked /><span data-i18n="picker.noRepeat">本輪不重複</span></label>
+          <span id="studentDrawPool"></span>
+        </div>
+        <section id="studentDrawStage" class="student-draw-stage" aria-busy="false">
+          <div class="picker-orbit" aria-hidden="true"></div>
+          <p id="studentDrawPhase" class="picker-phase" data-i18n="picker.ready">下一位，會是誰？</p>
+          <div id="studentDrawCards" class="student-draw-cards"></div>
+          <div id="studentDrawConfetti" class="celebration-layer" aria-hidden="true"></div>
+        </section>
+        <p id="studentDrawAnnouncement" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
+        <div class="student-draw-controls">
+          <button id="studentDrawStart" class="draw-button" type="button" data-i18n="picker.start">開始抽學生</button>
+          <button id="studentDrawSkip" class="button button-secondary" type="button" data-i18n="draw.skip" hidden>直接揭曉</button>
+          <button id="studentDrawReset" class="button button-secondary" type="button" data-i18n="picker.reset">重開一輪</button>
+        </div>
+        <details class="student-draw-history"><summary data-i18n="picker.history">本輪抽選紀錄</summary><ol id="studentDrawHistory"></ol></details>
+      </div>
+    </dialog>
+
+    <dialog id="groupPlannerDialog" class="group-planner-dialog" aria-labelledby="groupPlannerTitle">
+      <div class="group-planner-shell">
+        <header class="student-draw-header">
+          <div><p class="step-label" data-i18n="groups.eyebrow">TEMPORARY ACTIVITY</p><h2 id="groupPlannerTitle" data-i18n="groups.title">任務分組</h2></div>
+          <div class="student-draw-actions"><select id="groupSavedTasks" aria-label="已儲存的任務"></select><button id="groupNewTask" class="button button-secondary" type="button" data-i18n="groups.newTask">新增任務</button><button id="groupPlannerClose" class="button button-secondary" type="button" data-i18n="picker.close">關閉</button></div>
+        </header>
+        <div class="group-planner-settings">
+          <label><span data-i18n="groups.name">任務名稱</span><input id="groupTaskName" type="text" maxlength="60" placeholder="例：自然科報告" /></label>
+          <label><span data-i18n="groups.size">每組人數</span><select id="groupSize"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></label>
+          <label><span data-i18n="groups.strategy">分組方式</span><select id="groupStrategy"><option value="random" data-i18n="groups.random">隨機混合</option><option value="balanced" data-i18n="groups.balanced">盡量男女均衡</option><option value="same" data-i18n="groups.same">依性別分組</option></select></label>
+        </div>
+        <section class="group-roster-section group-table-preassign"><div class="group-section-heading"><strong data-i18n="groups.preassignTables">任務座位預排（選填）</strong></div><div id="groupTablePreassign" class="group-table-preassign-list"></div></section>
+        <section class="group-roster-section">
+          <div class="group-section-heading"><strong data-i18n="groups.roster">本次參與名單</strong><button id="groupSelectAll" class="text-button" type="button" data-i18n="groups.selectAll">全選</button></div>
+          <p class="group-help" data-i18n="groups.preassignHelp">勾選學生；抽組前可指定組別，其餘由系統抽入剩餘組別。無實體座位學生仍可參加。</p>
+          <div id="groupRoster" class="group-roster"></div>
+        </section>
+        <div class="group-actions">
+          <button id="groupDrawButton" class="button button-primary" type="button" data-i18n="groups.draw">立即抽全班</button>
+          <button id="groupRedrawButton" class="button button-secondary" type="button" data-i18n="groups.redrawUnlocked" disabled>重抽未鎖定組別</button>
+          <button id="groupUndoButton" class="button button-secondary" type="button" data-i18n="manual.undo" disabled>復原</button>
+          <button id="groupRedoButton" class="button button-secondary" type="button" data-i18n="manual.redo" disabled>重做</button>
+          <button id="groupPrintButton" class="button button-secondary" type="button" data-i18n="groups.print" disabled>列印分組</button>
+        </div>
+        <p id="groupStatus" class="group-status" role="status" aria-live="polite"></p>
+        <div id="groupResults" class="group-results"></div>
+      </div>
+    </dialog>
+
+    <dialog id="pinDialog" class="pin-dialog">
+      <form method="dialog" id="pinForm">
+        <div class="dialog-heading">
+          <div>
+            <p class="step-label" data-i18n="pin.heading">固定座位</p>
+            <h2 id="pinDialogTitle">指定學生</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="關閉" type="submit">×</button>
+        </div>
+        <label class="field field-wide">
+          <span data-i18n="pin.number">座號</span>
+          <select id="pinStudentSelect"></select>
+          <small id="pinHelp" data-i18n="pin.help">固定設定只會在管理模式顯示。</small>
+        </label>
+        <div id="pinValidationPanel" class="validation-panel" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+        <div class="dialog-actions">
+          <button class="button button-secondary" type="button" data-go-home data-i18n="home.back">回首頁</button>
+          <button class="button button-secondary" value="cancel" type="submit" data-i18n="common.cancel">取消</button>
+          <button class="button button-primary" id="confirmPinButton" value="default" type="submit" data-i18n="common.apply">套用</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="studentProfileOverlay" class="student-profile-overlay" role="dialog" aria-modal="true" aria-labelledby="studentProfileName" hidden>
+      <button class="button button-secondary profile-home" type="button" data-go-home data-i18n="home.back">回首頁</button>
+      <button class="profile-close" id="studentProfileClose" type="button" aria-label="關閉">×</button>
+      <div class="student-profile-card" id="studentProfileCard">
+        <div class="student-profile-inner">
+          <section class="profile-face profile-front" aria-hidden="true">
+            <span class="profile-orbit" aria-hidden="true"></span>
+            <p id="studentProfileNumber">No. 1</p>
+            <h2 id="studentProfileFrontName">學生姓名</h2>
+            <small data-i18n="profile.flipping">正在翻開學生資料卡…</small>
+          </section>
+          <section class="profile-face profile-back">
+            <div class="profile-heading">
+              <div>
+                <p id="studentProfileBackNumber">No. 1</p>
+                <h2 id="studentProfileName">學生姓名</h2>
+              </div>
+              <span class="profile-badge" data-i18n="profile.badge">STUDENT CARD</span>
+            </div>
+            <div id="studentProfileFields" class="profile-fields"></div>
+            <p class="profile-hint" id="studentProfileHint" data-i18n="profile.closeHint">點卡片外側或按 Esc 關閉</p>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <aside id="validationNotice" class="validation-notice admin-only" hidden>
+      <button id="validationToggle" class="validation-toggle" type="button" aria-controls="validationPanel" aria-expanded="true">
+        <strong id="validationNoticeTitle"></strong>
+        <span id="validationToggleLabel"></span>
+      </button>
+      <div id="validationPanel" class="validation-panel" role="alert" aria-atomic="true" hidden></div>
+    </aside>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="js/constants.js"></script>
+    <script src="js/i18n.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/seat-engine.js"></script>
+    <script src="js/group-planner.js"></script>
+    <script src="js/room-layout.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/group-ui.js"></script>
+    <script src="js/sound.js"></script>
+    <script src="js/draw-effects.js"></script>
+    <script src="js/student-draw.js"></script>
+    <script src="js/manual-seating.js"></script>
+    <script src="js/app.js"></script>
+<script src="https://polik18.github.io/assets/site-stats.js" defer></script>
+</body>
+</html>
