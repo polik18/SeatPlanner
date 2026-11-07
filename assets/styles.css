@@ -20,6 +20,71 @@
   --radius-md: 14px;
 }
 
+/* Inclusive 2.0: warm, readable controls and a separate first-visit surface. */
+:root { --paper: #f8f5ee; --surface: #fffdf8; --green: #36513a; --green-deep: #233e29; --green-soft: #edf1e6; --muted: #596354; --orange: #9b481a; --line: #dce0d2; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid #9b481a; outline-offset: 4px; }
+.save-status.is-error { color: #9c2b24; font-weight: 700; }
+.workflow-card { padding: 22px; margin: 0 0 22px; background: #f0f2e7; border: 1px solid #d7ddc9; border-radius: 18px; }
+.workflow-heading { display: flex; justify-content: space-between; gap: 15px; align-items: center; }
+.workflow-leaf { font-size: 40px; color: #64784d; }
+.workflow-card > p { color: #46533f; line-height: 1.7; margin: 10px 0 18px; }
+.workflow-steps { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 7px; }
+.workflow-steps button { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; padding: 12px 8px; text-align: left; background: #fffdf8; border: 1px solid #cdd6bf; border-radius: 10px; cursor: pointer; font-size: 12px; min-height: 72px; }
+.workflow-steps b { color: #526444; font-size: 12px; letter-spacing: .12em; }
+.workflow-steps button[aria-current="step"] { background: #36513a; color: #fff; }
+.workflow-steps button[aria-current="step"] b { color: #fff; }
+.workflow-status { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; line-height: 1.7; margin-top: 15px; color: #3e5036; }
+.workflow-status strong { flex-basis: 100%; }
+.support-card { margin-top: 16px; font-size: 13px; line-height: 1.8; border-top: 1px solid #d1d9c5; padding-top: 12px; }
+summary { cursor: pointer; min-height: 36px; font-weight: 600; }
+.advanced-settings { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 16px; }
+.advanced-settings > summary { color: var(--green); font-size: 13px; }
+.welcome-dialog { width: min(1140px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; border: 1px solid #e3d9c8; border-radius: 24px; background: #fffaf2; color: #243c27; overflow: auto; box-shadow: 0 32px 120px #14291b44; }
+.welcome-dialog::backdrop { background: #faf6ed; }
+.welcome-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; gap: 12px; font-size: 11px; letter-spacing: .15em; }
+.welcome-art { display: block; width: 100%; height: auto; max-height: 59dvh; object-fit: contain; background: #fbf5eb; }
+.welcome-content { padding: 22px 32px 28px; }
+.welcome-content h2 { font-size: clamp(23px, 3vw, 34px); font-weight: 600; }
+.welcome-content > p:not(.step-label) { line-height: 1.8; margin: 10px 0 20px; color: #47543b; }
+.welcome-content .step-label { color: #526444; letter-spacing: .06em; }
+.welcome-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.welcome-actions .button { min-height: 48px; padding: 12px 24px; }
+.welcome-active { overflow: hidden; }
+.welcome-active > :not(dialog) { visibility: hidden; }
+.tour-panel { position: fixed; z-index: 2147483646; right: 24px; bottom: 22px; width: min(410px, calc(100vw - 32px)); padding: 22px; border-radius: 20px; border: 2px solid #64794e; background: #fffdf5; color: #243c27; box-shadow: 0 15px 55px #1c382936; max-height: 44dvh; overflow: auto; }
+.tour-panel > p:not(.step-label) { font-size: 14px; line-height: 1.8; margin: 10px 0 18px; }
+.tour-actions { display: flex; justify-content: space-between; gap: 6px; }
+.tour-actions .button { padding: 10px 12px; min-height: 44px; }
+.tour-target { outline: 4px solid #9b481a !important; outline-offset: 5px; scroll-margin-block: 180px 400px; }
+.tour-active .classroom-stage, .tour-active .admin-panel { padding-bottom: 340px !important; }
+.tour-active .control-panel { padding-bottom: 340px !important; }
+.simple-dialog { width: min(580px, calc(100vw - 32px)); max-height: 85dvh; padding: 28px; border: 1px solid var(--line); border-radius: 20px; background: #fffdf8; color: #243c27; }
+.simple-dialog::backdrop { background: #182b2177; }
+.simple-dialog > p { line-height: 1.8; margin-top: 15px; }
+.observation-dialog pre { font: inherit; white-space: pre-wrap; line-height: 2.2; }
+.tutorial-storage-notice { position: fixed; left: 16px; bottom: 72px; max-width: min(430px, calc(100vw - 32px)); padding: 12px; z-index: 2147483647; background: #fff3ce; color: #633810; border: 1px solid #97753c; border-radius: 10px; font-size: 13px; }
+.high-contrast .seat { background: #fff !important; color: #102417 !important; border: 2px solid #142c1b !important; }
+.high-contrast .seat-number, .high-contrast .seat-name { font-size: clamp(20px, 2.4vw, 34px); }
+.calm-mode *, .calm-mode *::before, .calm-mode *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+.calm-mode .presentation-decor, .calm-mode #celebrationLayer { display: none !important; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+@media (max-width: 767px) {
+  .welcome-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); border-radius: 16px; }
+  .welcome-top { padding: 10px 16px; font-size: 9px; }
+  .welcome-content { padding: 18px; }
+  .welcome-actions { display: grid; grid-template-columns: 1fr; }
+  .welcome-art { max-height: none; }
+  .workflow-card { padding: 16px; }
+  .workflow-steps { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .tour-panel { bottom: 8px; right: 8px; width: calc(100vw - 16px); padding: 16px; max-height: 46dvh; }
+  .tour-active .home-navigation { display: none; }
+}
+@media print {
+  body:has(.observation-dialog[open]) > :not(.observation-dialog) { display: none !important; }
+  .observation-dialog[open] { position: static; width: 100%; max-height: none; border: 0; }
+  .observation-dialog .dialog-actions { display: none; }
+}
+
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
@@ -1015,4 +1080,23 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
   .manual-panel > .field { display: block; }
   .manual-selection > strong, .manual-auto { grid-column: 1 / -1; }
   .manual-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+#workflowMobileSlot { display: none; }
+.manual-mode .workflow-card { display: none; }
+.high-contrast .seat .student-name, .high-contrast .seat .student-name-only, .high-contrast .seat .student-result > strong { font-size: clamp(22px, 2.4vw, 34px); }
+@media (max-width: 980px) {
+  #workflowMobileSlot { display: block; padding: 12px 12px 0; }
+  #workflowMobileSlot .workflow-card { margin-bottom: 0; }
+}
+@media (max-width: 620px) {
+  body:not(.manual-mode) .app-header { position: relative; display: block; padding: 12px; min-height: auto; }
+  body:not(.manual-mode) .brand { gap: 10px; margin-bottom: 12px; }
+  body:not(.manual-mode) .brand-mark { width: 36px; height: 36px; border-radius: 10px; }
+  body:not(.manual-mode) .brand h1 { font-size: 20px; }
+  body:not(.manual-mode) .brand .eyebrow { font-size: 9px; }
+  body:not(.manual-mode) .header-actions { width: 100%; display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px; }
+  body:not(.manual-mode) .header-actions .button { min-height: 38px; padding: 8px 10px; font-size: 12px; }
+  body:not(.manual-mode) .header-actions .save-status { flex-basis: 100%; display: block; font-size: 11px; }
+  .workflow-heading h2 { font-size: 20px; }
 }

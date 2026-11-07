@@ -50,6 +50,7 @@ try:
         page = browser.new_page(viewport={'width': 1440, 'height': 900}, reduced_motion='reduce')
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
+        page.on('dialog', lambda d: d.accept())
         load(page)
         page.locator('#manualStartButton').click()
         expect(page.locator('#manualFinishButton')).to_be_disabled()
@@ -101,13 +102,14 @@ try:
         page.locator('[data-admin-mode="layout"]').click()
         with page.expect_download() as event:
             page.locator('#exportButton').click()
-        exported = json.loads(Path(event.value.path()).read_text())
+        exported = json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
         assert exported['classes'][0]['state']['manualDraft'] == before
         page.locator('#importFileInput').set_input_files({'name': 'draft.json', 'mimeType': 'application/json', 'buffer': json.dumps(exported).encode()})
         expect(page.locator('#manualPanel')).to_be_visible()
         assert stored(page)['manualDraft'] == before
         # Rotate an unfinished draft and rotate it back.
         page.locator('[data-admin-mode="layout"]').click()
+        page.locator('#rotateClockwiseButton').evaluate('(e) => SeatMaster.workflow.reveal(e)')
         page.locator('#rotateClockwiseButton').click()
         assert sorted(n for n in stored(page)['manualDraft'].values() if n) == [1, 2, 3]
         page.locator('#rotateCounterclockwiseButton').click()
@@ -135,7 +137,6 @@ try:
         page.locator('#adminButton').click()
         page.locator('#manualStartButton').click()
         assert stored(page)['manualDraft'] == completed
-        page.once('dialog', lambda d: d.accept())
         page.locator('#manualClearButton').click()
         assert all(n is None for n in stored(page)['manualDraft'].values())
         assert stored(page)['assignment'] == completed
@@ -192,12 +193,11 @@ try:
         # Home is consistent across editing, presentation and modal activities.
         final_result = stored(page)['assignment']
         page.locator('#manualStartButton').click()
-        page.once('dialog', lambda d: d.accept())
         page.locator('#manualClearButton').click()
         seat(page, '0-0').click()
         draft = stored(page)['manualDraft']
         page.locator('#homeButton').click()
-        expect(page.locator('[data-admin-mode="layout"]')).to_have_attribute('aria-selected', 'true')
+        expect(page.locator('[data-admin-mode="layout"]')).to_have_attribute('aria-pressed', 'true')
         expect(page.locator('#manualPanel')).to_be_hidden()
         assert stored(page)['manualDraft'] == draft
         assert stored(page)['assignment'] == final_result

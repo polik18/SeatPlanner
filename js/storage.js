@@ -128,6 +128,30 @@
       const parsed = JSON.parse(await file.text());
       const migrated = migrate(parsed);
       if (!migrated) throw new Error(SeatMaster.i18n ? SeatMaster.i18n.t("storage.invalid") : "這不是有效的 Classroom Seat Master 設定檔。");
+      // Import is all-or-nothing. Reject contradictory results instead of letting
+      // hydration quietly discard them after the workspace has been changed.
+      for (const entry of migrated.classes) {
+        const state = entry.state;
+        const ids = new Set(state.seats.filter(seat => seat.type !== "aisle").map(seat => seat.id));
+        const roster = SeatMaster.engine ? new Set(SeatMaster.engine.studentsRequiringSeats(SeatMaster.engine.normalizeConfig(state.config)).map(student => student.number)) : null;
+        for (const [source, complete] of [[state.assignment, state.hasDrawn], [state.manualDraft, false]]) {
+          if (source == null) continue;
+          if (typeof source !== "object" || Array.isArray(source)) throw new Error(SeatMaster.i18n.t("storage.invalid"));
+          const seen = new Set();
+          for (const [id, number] of Object.entries(source)) {
+            if (!ids.has(id) || (number !== null && (!Number.isInteger(number) || seen.has(number) || (roster && !roster.has(number))))) throw new Error(SeatMaster.i18n.t("storage.invalid"));
+            if (number !== null) seen.add(number);
+          }
+          if (complete && roster && seen.size !== roster.size) throw new Error(SeatMaster.i18n.t("storage.invalid"));
+        }
+        if (state.roomLayout) {
+          if (!Array.isArray(state.roomLayout.tables)) throw new Error(SeatMaster.i18n.t("storage.invalid"));
+          const used = new Set();
+          for (const table of state.roomLayout.tables) {
+            if (!table || !Array.isArray(table.seatIds) || table.seatIds.some(id => !ids.has(id) || used.has(id) || !used.add(id))) throw new Error(SeatMaster.i18n.t("storage.invalid"));
+          }
+        }
+      }
       return migrated;
     }
   };

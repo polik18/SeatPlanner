@@ -46,6 +46,7 @@ assert.throws(() => SM.groupPlanner.draw(students, 4, 'same', { 1: 0, 7: 0 }));
 const table = { x: 50, y: 50, width: 40, height: 10, rotation: 90, type: 'round', geometry: {}, seatIds: ['a', 'b'], seatPositions: [] };
 assert.equal(SM.roomLayout.tableIntersectsPath(table, { x: 47, y: 65, width: 6, height: 6 }), true);
 assert.equal(SM.roomLayout.tableIntersectsPath(table, { x: 65, y: 47, width: 6, height: 6 }), false);
+assert.equal(SM.roomLayout.tableIntersectsPath(table, { x: 47, y: 80, width: 6, height: 6 }, 0, { width: 200, height: 100 }), true);
 table.seatPositions = SM.roomLayout.autoSeatPositions(table, table.seatIds);
 const added = SM.roomLayout.setSeatCount(table, table.seatIds, 3, () => 1);
 assert.equal(new Set(added.seatPositions.map(p => `${p.x},${p.y}`)).size, 3);

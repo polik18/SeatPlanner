@@ -25,6 +25,7 @@ try:
         browser = pw.chromium.launch()
         page = browser.new_page(viewport={"width": 1440, "height": 1000})
         page.on("pageerror", lambda error: errors.append(str(error)))
+        page.on('dialog', lambda dialog: dialog.accept())
         page.goto(f"http://127.0.0.1:{server.server_port}/")
         demo_backup = page.evaluate("(key) => JSON.parse(localStorage.getItem(key))", KEY)
         demo_backup["classes"][0]["id"] = "imported-class"

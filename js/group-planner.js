@@ -16,13 +16,7 @@
     const pool = Array.from(students || []);
     if (new Set(pool.map((student) => student.number)).size !== pool.length) throw new Error("學生座號重複，請先檢查名單。");
     if (strategy === "same") return drawSame(pool, targetSize, preassignments || {});
-    let groupsCount = numberOfGroups(pool.length, targetSize);
-    if (strategy === "same" && pool.length > 1) {
-      const males = pool.filter((student) => student.gender === "male").length;
-      const females = pool.filter((student) => student.gender === "female").length;
-      groupsCount = Math.max(groupsCount, Math.ceil(males / 6) + Math.ceil(females / 6));
-      groupsCount = Math.min(groupsCount, Math.floor(pool.length / 2));
-    }
+    const groupsCount = numberOfGroups(pool.length, targetSize);
     if (groupsCount > pool.length) throw new Error("學生人數不足以建立任務小組。");
     const groups = Array.from({ length: groupsCount }, (_, index) => ({ id: `group-${index + 1}`, name: `第 ${index + 1} 組`, members: [], locked: false, gender: "" }));
     const byNumber = new Map(pool.map((student) => [student.number, student]));
@@ -35,29 +29,11 @@
       const group = groups[index];
       const student = byNumber.get(number);
       if (group.members.length >= 6) throw new Error(`${group.name} 已達 6 人上限。`);
-      if (strategy === "same" && group.gender && group.gender !== student.gender) throw new Error(`${group.name} 的預排成員性別不同，無法套用男女分組。`);
-      if (strategy === "same") group.gender = student.gender;
       group.members.push(number);
     });
 
     const assigned = new Set(groups.flatMap((group) => group.members));
     const pending = SM.engine.secureShuffle(pool.filter((student) => !assigned.has(student.number)));
-    const room = (group) => Math.max(0, Math.ceil(pool.length / groups.length) - group.members.length);
-    if (strategy === "same") {
-      const genders = ["male", "female"];
-      const openGroups = groups.filter((group) => !group.gender);
-      openGroups.forEach((group) => {
-        const counts = Object.fromEntries(genders.map((gender) => [gender, pending.filter((student) => student.gender === gender).length]));
-        const assignedCapacity = Object.fromEntries(genders.map((gender) => [gender, groups.filter((item) => item.gender === gender).reduce((sum, item) => sum + room(item), 0)]));
-        group.gender = counts.male - assignedCapacity.male >= counts.female - assignedCapacity.female ? "male" : "female";
-      });
-      pending.forEach((student) => {
-        const choices = SM.engine.secureShuffle(groups.filter((group) => group.gender === student.gender && group.members.length < 6));
-        const target = choices.sort((left, right) => left.members.length - right.members.length)[0];
-        if (target) target.members.push(student.number);
-        else throw new Error("依性別分組後，組別人數無法符合 2–6 人限制；請改用混合或均衡分組。");
-      });
-    } else {
       pending.forEach((student) => {
         const available = groups.filter((group) => group.members.length < 6);
         if (!available.length) throw new Error("預排人數過多，請減少預排或增加組別。");
@@ -72,7 +48,6 @@
         }
         target.members.push(student.number);
       });
-    }
     return groups;
   }
 

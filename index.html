@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
-    <title>Classroom Seat Master｜班級座位編排</title>
+    <title>SeatPlanner Inclusive｜共融教室座位與合作學習</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23174f3c'/%3E%3Cpath d='M18 18h28v9H27v10h19v9H18z' fill='%23fff'/%3E%3Ccircle cx='46' cy='18' r='7' fill='%23e77732'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="assets/styles.css" />
   </head>
@@ -14,14 +14,15 @@
     </nav>
     <header class="app-header">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true">CM</span>
+        <span class="brand-mark" aria-hidden="true">SI</span>
         <div>
-          <p class="eyebrow">CLASSROOM SEAT MASTER</p>
+          <p class="eyebrow">SEATPLANNER INCLUSIVE · 2.0</p>
           <h1 id="pageTitle">班級座位編排</h1>
         </div>
       </div>
       <div class="header-actions admin-only">
         <span class="save-status" id="saveStatus" aria-live="polite" data-i18n="common.saved">已儲存於本機</span>
+        <button class="button button-secondary" id="tutorialButton" type="button" data-i18n="workflow.help">？ 操作教學</button>
         <button class="button button-secondary language-button" type="button"><span data-language-label>EN</span></button>
         <button class="button button-secondary" id="fullscreenButton" type="button" data-i18n="common.fullscreen">全螢幕</button>
         <button class="button button-secondary student-draw-open" type="button" data-i18n="picker.title">抽學生</button>
@@ -30,6 +31,8 @@
         <button class="button button-primary" id="presentationButton" type="button" data-i18n="common.startPresentation">點此開始展示</button>
       </div>
       <div class="header-actions presentation-only">
+        <button class="button button-secondary" id="calmButton" type="button" aria-pressed="false" data-i18n="presentation.calm">少動畫</button>
+        <button class="button button-secondary" id="contrastButton" type="button" aria-pressed="false" data-i18n="presentation.contrast">高對比大字</button>
         <button class="button button-secondary student-draw-open" type="button" data-i18n="picker.title">抽學生</button>
         <button class="button button-secondary language-button" type="button"><span data-language-label>EN</span></button>
         <button class="button button-secondary sound-button" id="soundButton" type="button" aria-pressed="true">
@@ -49,6 +52,7 @@
       </div>
     </header>
 
+    <div id="workflowMobileSlot" class="admin-only"></div>
     <main class="app-shell">
       <aside id="manualPanel" class="manual-panel panel-section admin-only" aria-labelledby="manualTitle" hidden>
         <h2 id="manualTitle" data-i18n="mode.manual">全手動排位</h2>
@@ -147,9 +151,9 @@
 
           <label class="field field-wide">
             <span data-i18n="admin.studentData">學生資料（選填）</span>
-            <textarea id="studentDataInput" rows="7" placeholder="座號　姓名　外號　帳號　密碼　居住地點" data-i18n-placeholder="admin.dataPlaceholder"></textarea>
+            <textarea id="studentDataInput" rows="7" placeholder="座號　姓名" data-i18n-placeholder="admin.dataPlaceholder"></textarea>
             <small data-i18n="admin.dataHelp">第一列填欄名，可直接貼上 Excel；姓名後方可增加任意資料欄位。</small>
-            <small class="privacy-note" data-i18n="admin.dataPrivacy">資料會在展示模式點擊學生卡牌後顯示；密碼類欄位預設遮罩，請仍避免輸入不應公開的敏感資訊。</small>
+            <small class="privacy-note" data-i18n="admin.dataPrivacy">展示僅公開座號與姓名。完整備份仍包含原有欄位，請避免敏感資訊。</small>
           </label>
 
           <div class="student-summary" id="studentSummary" aria-live="polite"></div>
@@ -367,12 +371,29 @@
             <button class="button button-secondary" id="importButton" type="button" data-i18n="admin.import">匯入設定</button>
             <button class="button button-secondary" id="clearPinsButton" type="button" data-i18n="admin.clearPins">清除固定</button>
             <button class="button button-danger" id="resetButton" type="button" data-i18n="admin.reset">恢復預設</button>
+            <button class="button button-secondary" id="recoverButton" type="button" data-i18n="workflow.recover" disabled>復原資料操作</button>
+            <button class="button button-secondary" id="shareChartButton" type="button" data-i18n="workflow.shareFile">去敏座位表</button>
           </div>
+          <p class="privacy-note" data-i18n="workflow.backupNote"></p>
+          <small data-i18n="workflow.shareNote"></small>
           <input id="importFileInput" type="file" accept="application/json,.json" hidden />
         </section>
       </aside>
 
       <section class="classroom-stage" aria-label="教室座位圖">
+        <section class="workflow-card admin-only" aria-labelledby="workflowTitle">
+          <div class="workflow-heading"><div><p class="step-label">SEATPLANNER INCLUSIVE</p><h2 id="workflowTitle" data-i18n="workflow.title"></h2></div><span class="workflow-leaf" aria-hidden="true">❧</span></div>
+          <p data-i18n="workflow.hint"></p>
+          <nav class="workflow-steps" aria-label="編排步驟" data-i18n-aria-label="workflow.modes">
+            <button type="button" data-workflow="class" aria-current="step"><b>01</b><span data-i18n="workflow.class"></span></button>
+            <button type="button" data-workflow="room"><b>02</b><span data-i18n="workflow.room"></span></button>
+            <button type="button" data-workflow="priority"><b>03</b><span data-i18n="workflow.priority"></span></button>
+            <button type="button" data-workflow="seat"><b>04</b><span data-i18n="workflow.seat"></span></button>
+            <button type="button" data-workflow="share"><b>05</b><span data-i18n="workflow.share"></span></button>
+          </nav>
+          <div class="workflow-status" aria-live="polite"><span id="workflowStudents"></span><span id="workflowSeats"></span><span id="workflowPins"></span><strong id="workflowResult"></strong></div>
+          <details class="support-card"><summary data-i18n="support.title"></summary><p data-i18n="support.text"></p><button class="button button-secondary" id="observationButton" type="button" data-i18n="support.observation"></button></details>
+        </section>
         <div class="presentation-decor presentation-only" aria-hidden="true">
           <span class="aurora aurora-one"></span>
           <span class="aurora aurora-two"></span>
@@ -393,11 +414,11 @@
         </div>
 
         <div class="admin-mode-bar admin-only" aria-label="管理模式">
-          <div class="mode-tabs" role="tablist">
-            <button class="mode-tab is-active" type="button" data-admin-mode="layout" role="tab" aria-selected="true" data-i18n="mode.layout">首頁／座位設定</button>
-            <button class="mode-tab" type="button" data-admin-mode="prearrange" role="tab" aria-selected="false" data-i18n="mode.prearrange">事先安排</button>
-            <button class="mode-tab" type="button" data-admin-mode="manual" role="tab" aria-selected="false" data-i18n="mode.manual">全手動排位</button>
-            <button class="mode-tab" id="adjustModeButton" type="button" data-admin-mode="adjust" role="tab" aria-selected="false" data-i18n="mode.adjust" disabled>調整結果</button>
+          <div class="mode-tabs" role="group" aria-label="座位操作" data-i18n-aria-label="workflow.modes">
+            <button class="mode-tab is-active" type="button" data-admin-mode="layout" aria-pressed="true" data-i18n="mode.layout">首頁／座位設定</button>
+            <button class="mode-tab" type="button" data-admin-mode="prearrange" aria-pressed="false" data-i18n="mode.prearrange">優先安排</button>
+            <button class="mode-tab" type="button" data-admin-mode="manual" aria-pressed="false" data-i18n="mode.manual">全手動排位</button>
+            <button class="mode-tab" id="adjustModeButton" type="button" data-admin-mode="adjust" aria-pressed="false" data-i18n="mode.adjust" disabled>調整結果</button>
           </div>
           <div class="mode-guidance">
             <p id="adminModeHelp">點擊座位可切換不限、男生、女生與走道。</p>
@@ -566,9 +587,26 @@
       <div id="validationPanel" class="validation-panel" role="alert" aria-atomic="true" hidden></div>
     </aside>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <p id="tutorialStorageNotice" class="tutorial-storage-notice" role="status" hidden></p>
+
+    <dialog id="welcomeDialog" class="welcome-dialog" aria-labelledby="welcomeTitle" aria-describedby="welcomeSubtitle">
+      <div class="welcome-top"><span>SEATPLANNER INCLUSIVE</span><button class="button button-secondary language-button" type="button"><span data-language-label>EN</span></button></div>
+      <img class="welcome-art" src="SeatPlanner-main.png" alt="" width="1672" height="941" />
+      <div class="welcome-content"><p class="step-label" data-i18n="welcome.local"></p><h2 id="welcomeTitle" data-i18n="welcome.title"></h2><p id="welcomeSubtitle" data-i18n="welcome.subtitle"></p>
+        <p id="welcomeError" role="alert" hidden></p>
+        <div class="welcome-actions"><button id="welcomeStart" class="button button-primary" type="button" data-i18n="welcome.start" autofocus>開始使用</button><button id="welcomeImport" class="button button-secondary" type="button" data-i18n="welcome.import">匯入既有班級</button><button id="welcomeSkip" class="button button-quiet" type="button" data-i18n="welcome.skip">跳過介紹</button></div>
+      </div>
+    </dialog>
+    <section id="tourPanel" class="tour-panel" role="region" aria-labelledby="tourTitle" hidden>
+      <p id="tourProgress" class="step-label" aria-live="polite"></p><h2 id="tourTitle"></h2><p id="tourText"></p>
+      <div class="tour-actions"><button id="tourPrevious" class="button button-secondary" type="button" data-i18n="tour.previous"></button><button id="tourSkip" class="button button-quiet" type="button" data-i18n="welcome.skip"></button><button id="tourNext" class="button button-primary" type="button" data-i18n="tour.next"></button></div>
+    </section>
+    <dialog id="readyDialog" class="simple-dialog" aria-labelledby="readyTitle"><h2 id="readyTitle" data-i18n="tour.ready"></h2><p data-i18n="tour.readyText"></p><button id="readyCreate" class="button button-primary" type="button" data-i18n="tour.create"></button></dialog>
+    <dialog id="observationDialog" class="simple-dialog observation-dialog" aria-labelledby="observationTitle"><h2 id="observationTitle" data-i18n="support.observationTitle"></h2><pre data-i18n="support.observationText"></pre><div class="dialog-actions"><button class="button button-secondary" id="observationClose" type="button" data-i18n="support.close"></button><button class="button button-primary" id="observationPrint" type="button" data-i18n="support.print"></button></div></dialog>
 
     <script src="js/constants.js"></script>
     <script src="js/i18n.js"></script>
+    <script src="js/inclusive-i18n.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/seat-engine.js"></script>
     <script src="js/group-planner.js"></script>
@@ -577,9 +615,11 @@
     <script src="js/group-ui.js"></script>
     <script src="js/sound.js"></script>
     <script src="js/draw-effects.js"></script>
+    <script src="js/onboarding-storage.js"></script>
+    <script src="js/onboarding.js"></script>
+    <script src="js/workflow.js"></script>
     <script src="js/student-draw.js"></script>
     <script src="js/manual-seating.js"></script>
     <script src="js/app.js"></script>
-<script src="https://polik18.github.io/assets/site-stats.js" defer></script>
 </body>
 </html>

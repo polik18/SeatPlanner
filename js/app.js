@@ -20,6 +20,38 @@
   let roomUndoStack = [];
   let roomRedoStack = [];
   const roomRangeEdits = new Set();
+  let recoveryWorkspace = null;
+
+  function preserveRecovery() {
+    syncActiveClass();
+    recoveryWorkspace = JSON.parse(JSON.stringify(workspace));
+    const button = document.getElementById("recoverButton");
+    if (button) button.disabled = false;
+  }
+
+  function reconcileSeating() {
+    const valid = new Set(engine.studentsRequiringSeats(state.config).map((student) => student.number));
+    const seen = new Set();
+    const source = { ...state.assignment, ...(state.manualDraft || {}) };
+    const kept = {};
+    state.seats.filter((seat) => seat.type !== "aisle").forEach((seat) => {
+      const number = source[seat.id];
+      kept[seat.id] = valid.has(number) && !seen.has(number) ? number : null;
+      if (kept[seat.id] !== null) seen.add(number);
+    });
+    if (state.hasDrawn && seen.size === valid.size) state.assignment = kept;
+    else {
+      state.hasDrawn = false;
+      state.assignment = {};
+      state.manualDraft = seen.size ? kept : state.manualDraft ? SeatMaster.manualSeating.normalize(state, state.manualDraft) : null;
+    }
+  }
+
+  function confirmSeatRemoval(ids) {
+    const removed = new Set(ids);
+    const count = state.seats.filter((seat) => removed.has(seat.id) && (seat.pin || Number.isInteger(state.assignment[seat.id]) || Number.isInteger(state.manualDraft?.[seat.id]))).length;
+    return !count || window.confirm(i18n.t("confirm.removeSeats", { count }));
+  }
 
   function makeClassId() {
     const used = new Set((workspace?.classes || []).map((entry) => entry.id));
@@ -39,7 +71,10 @@
 
   function saveWorkspace() {
     syncActiveClass();
-    storage.save(workspace);
+    const result = storage.save(workspace);
+    ui.setSaveStatus(i18n.t(result.ok ? "common.saved" : "common.saveFailed"));
+    document.getElementById("saveStatus").classList.toggle("is-error", !result.ok);
+    return result;
   }
 
   function renderClassManager() {
@@ -115,6 +150,7 @@
   }
 
   function addClass(copyCurrent = false) {
+    SeatMaster.onboarding?.markMeaningfulActivity();
     const source = copyCurrent ? JSON.parse(JSON.stringify(state)) : SeatMaster.createDefaultState();
     const number = workspace.classes.length + 1;
     source.config = { ...source.config, className: copyCurrent ? `${source.config.className || i18n.t("common.untitled")} ${i18n.t("classes.copySuffix")}` : i18n.t("classes.newName", { number }) };
@@ -137,6 +173,7 @@
     if (!workspace || workspace.classes.length <= 1) return;
     const entry = activeClassEntry();
     if (!window.confirm(i18n.t("confirm.deleteClass", { className: entry.state.config.className || i18n.t("common.untitled") }))) return;
+    preserveRecovery();
     const index = workspace.classes.findIndex((item) => item.id === entry.id);
     workspace.classes.splice(index, 1);
     workspace.activeClassId = workspace.classes[Math.max(0, index - 1)].id;
@@ -174,6 +211,7 @@
   }
 
   function recordRoomEdit() {
+    preserveRecovery();
     roomUndoStack.push(roomEditSnapshot());
     if (roomUndoStack.length > 80) roomUndoStack.shift();
     roomRedoStack = [];
@@ -237,13 +275,13 @@
     return hydrated;
   }
 
-  function saveSoon() {
+  function saveSoon(markActivity = true) {
+    if (markActivity) SeatMaster.onboarding?.markMeaningfulActivity();
     ui.setSaveStatus(i18n.t("common.saving"));
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => {
       saveTimer = null;
       saveWorkspace();
-      ui.setSaveStatus(i18n.t("common.saved"));
     }, 180);
   }
 
@@ -263,6 +301,7 @@
     if (manual) manual.render(manualActive);
     if (manualActive && focusedSeat) document.querySelector(`.seat[data-seat-id="${focusedSeat}"]`)?.focus({ preventScroll: true });
     ui.positionValidationNotice();
+    SeatMaster.workflow?.render(state);
   }
 
   function updateAdminModeUI() {
@@ -274,7 +313,7 @@
     document.querySelectorAll("[data-admin-mode]").forEach((button) => {
       const active = button.dataset.adminMode === adminMode;
       button.classList.toggle("is-active", active);
-      button.setAttribute("aria-selected", String(active));
+      button.setAttribute("aria-pressed", String(active));
     });
     document.getElementById("adjustModeButton").disabled = !state.hasDrawn;
     const help = document.getElementById("adminModeHelp");
@@ -344,14 +383,16 @@
     const config = readConfigFromInputs();
     const previous = state.config;
     const cosmeticOnly = ["rows", "cols", "maxNumber", "emptyNumbers", "femaleStart", "studentData", "seatExcludedNumbers"].every((key) => previous[key] === config[key]);
+    if (!cosmeticOnly && (state.hasDrawn || state.manualDraft || state.seats.some((seat) => seat.pin))) {
+      if (!window.confirm(i18n.t("confirm.changeLayout"))) { ui.fillInputs(state); return; }
+      preserveRecovery();
+    }
     state.config = config;
     if (cosmeticOnly) { render(); saveSoon(); return; }
     if (!state.roomLayout) state.seats = engine.buildSeatGrid(config, state.seats);
     const validNumbers = new Set(engine.studentsRequiringSeats(config).map((student) => student.number));
     state.seats.forEach((seat) => { if (seat.pin && !validNumbers.has(seat.pin)) seat.pin = null; });
-    state.assignment = {};
-    state.hasDrawn = false;
-    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    reconcileSeating();
     if (manual) manual.reset();
     selectedAdjustmentSeatId = null;
     render();
@@ -419,6 +460,7 @@
 
   function applyRoomTemplate(template) {
     if (template === "grid" && !state.roomLayout) return;
+    if ((state.hasDrawn || state.manualDraft || state.seats.some((seat) => seat.pin)) && !window.confirm(i18n.t("confirm.changeLayout"))) return;
     closeStudentProfile();
     recordRoomEdit();
     if (template === "grid") {
@@ -522,6 +564,7 @@
     const layout = state.roomLayout;
     const table = layout?.tables.find((item) => item.id === selectedTableId);
     if (!layout || !table) return;
+    if (Number(count) < table.seatIds.length && !confirmSeatRemoval(table.seatIds.slice(Math.max(1, Number(count))))) { render({ keepInputs: true }); return; }
     if (!options.alreadyRecorded) recordRoomEdit();
     if (options.resetEdges) table.edgeCounts = null;
     const target = Math.max(1, Math.min(60, Math.round(Number(count) || 1)));
@@ -536,12 +579,7 @@
     });
     const addedSeat = [...table.seatIds].reverse().find((id) => !oldIds.has(id));
     if (addedSeat) layout.selectedSeatId = addedSeat;
-    if (state.hasDrawn) {
-      state.assignment = Object.fromEntries(state.seats.filter((seat) => seat.type !== "aisle").map((seat) => [seat.id, state.assignment[seat.id] ?? null]));
-      state.hasDrawn = Object.values(state.assignment).filter(Number.isInteger).length === engine.studentsRequiringSeats(state.config).length;
-      if (!state.hasDrawn) state.assignment = {};
-    }
-    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    reconcileSeating();
     if (!table.seatIds.includes(layout.selectedSeatId)) layout.selectedSeatId = null;
     render({ keepInputs: true }); saveSoon();
   }
@@ -570,13 +608,12 @@
     if (!layout || layout.tables.length < 2) { ui.showToast(i18n.t("room.keepOneTable"), "error"); return; }
     const table = layout.tables.find((item) => item.id === selectedTableId);
     if (!table) return;
+    if (!window.confirm(i18n.t("confirm.deleteTable", { count: table.seatIds.length }))) return;
     recordRoomEdit();
     const removed = new Set(table.seatIds);
     layout.tables = layout.tables.filter((item) => item.id !== selectedTableId);
     state.seats = state.seats.filter((seat) => !removed.has(seat.id));
-    state.assignment = {};
-    state.hasDrawn = false;
-    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    reconcileSeating();
     selectedTableId = layout.tables[0]?.id || null;
     layout.selectedTableId = selectedTableId;
     render({ keepInputs: true }); saveSoon();
@@ -618,12 +655,12 @@
   function cycleSeat(seatId) {
     const seat = state.seats.find((item) => item.id === seatId);
     if (!seat) return;
+    if ((state.hasDrawn || state.manualDraft || seat.pin) && !window.confirm(i18n.t("confirm.changeLayout"))) return;
+    preserveRecovery();
     ui.setValidationAnchor(`.seat[data-seat-id="${seatId}"]`);
     seat.type = engine.nextSeatType(seat.type);
     if (seat.type === "aisle") seat.pin = null;
-    state.assignment = {};
-    state.hasDrawn = false;
-    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    reconcileSeating();
     if (manual) manual.reset();
     selectedAdjustmentSeatId = null;
     render({ keepInputs: true });
@@ -634,14 +671,14 @@
     ui.setValidationAnchor(`[data-axis="${axis}"][data-index="${index}"]`);
     const seats = state.seats.filter((seat) => seat[axis] === index);
     if (!seats.length) return;
+    if ((state.hasDrawn || state.manualDraft || seats.some(seat => seat.pin)) && !window.confirm(i18n.t("confirm.changeLayout"))) return;
+    preserveRecovery();
     const nextType = engine.nextSeatType(seats[0].type);
     seats.forEach((seat) => {
       seat.type = nextType;
       if (nextType === "aisle") seat.pin = null;
     });
-    state.assignment = {};
-    state.hasDrawn = false;
-    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    reconcileSeating();
     if (manual) manual.reset();
     selectedAdjustmentSeatId = null;
     render({ keepInputs: true });
@@ -649,6 +686,8 @@
   }
 
   function applyGenderPattern(pattern) {
+    if ((state.hasDrawn || state.manualDraft || state.seats.some(seat => seat.pin)) && !window.confirm(i18n.t("confirm.changeLayout"))) return;
+    preserveRecovery();
     closeStudentProfile();
     const roomOrder = pattern === "tableSequence" && state.roomLayout
       ? Object.fromEntries(state.roomLayout.tables.flatMap((table) => {
@@ -704,6 +743,8 @@
   function applyPin() {
     const seat = state.seats.find((item) => item.id === activePinSeatId);
     if (!seat) return;
+    if ((state.hasDrawn || state.manualDraft) && !window.confirm(i18n.t("confirm.changeLayout"))) return;
+    preserveRecovery();
     const value = Number.parseInt(document.getElementById("pinStudentSelect").value, 10);
     seat.pin = Number.isInteger(value) ? value : null;
     state.assignment = {};
@@ -802,11 +843,12 @@
     document.getElementById("studentProfileFrontName").textContent = name;
     document.getElementById("studentProfileName").textContent = name;
     const fields = document.getElementById("studentProfileFields");
-    fields.innerHTML = record.fields.length ? record.fields.map((field, index) => {
+    const publicFields = document.body.classList.contains("presentation-mode") ? [] : record.fields;
+    fields.innerHTML = publicFields.length ? publicFields.map((field, index) => {
       const sensitive = isSensitiveField(field.label);
       const value = sensitive ? "••••••••" : field.value;
       return `<div class="profile-field"><span>${ui.escapeHtml(field.label)}</span><div class="profile-value-row"><strong id="profileValue${index}" ${sensitive ? `data-actual="${ui.escapeHtml(field.value)}" data-sensitive="true"` : ""}>${ui.escapeHtml(value)}</strong>${sensitive ? `<button class="sensitive-toggle" type="button" data-target="profileValue${index}" aria-pressed="false">${ui.escapeHtml(i18n.t("profile.reveal"))}</button>` : ""}</div></div>`;
-    }).join("") : `<p class="profile-empty">${ui.escapeHtml(i18n.t("profile.noData"))}</p>`;
+    }).join("") : `<p class="profile-empty">${ui.escapeHtml(i18n.t("profile.publicOnly"))}</p>`;
     window.clearTimeout(profileFlipTimer);
     overlay.hidden = false;
     card.classList.remove("is-flipped");
@@ -833,7 +875,7 @@
     selectedAdjustmentSeatId = null;
     if (mode === "manual") manual.start();
     render({ keepInputs: true });
-    saveSoon();
+    saveSoon(false);
   }
 
   function selectAdjustmentSeat(seatId) {
@@ -1316,21 +1358,33 @@
     document.getElementById("addClassButton").addEventListener("click", () => addClass(false));
     document.getElementById("duplicateClassButton").addEventListener("click", () => addClass(true));
     document.getElementById("deleteClassButton").addEventListener("click", deleteActiveClass);
-    document.getElementById("exportButton").addEventListener("click", () => { saveWorkspace(); storage.export(workspace); ui.showToast(i18n.t("toast.exported")); });
+    document.getElementById("exportButton").addEventListener("click", () => {
+      if (!window.confirm(i18n.t("confirm.fullBackup"))) return;
+      saveWorkspace(); storage.export(workspace); ui.showToast(i18n.t("toast.exported"));
+    });
     document.getElementById("importButton").addEventListener("click", () => document.getElementById("importFileInput").click());
     document.getElementById("importFileInput").addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
       try {
-        importClasses(await storage.readImport(file));
+        const incoming = await storage.readImport(file);
+        const count = incoming.classes.length;
+        const students = incoming.classes.reduce((sum, entry) => sum + engine.buildStudents(engine.normalizeConfig(entry.state.config)).length, 0);
+        if (!window.confirm(i18n.t("confirm.importPreview", { count, students, names: incoming.classes.map((entry) => entry.state.config.className || "—").join(", ") }))) return;
+        preserveRecovery();
+        importClasses(incoming);
+        SeatMaster.onboarding?.markMeaningfulActivity();
         ui.showToast(i18n.t("toast.imported"));
       } catch (error) {
         ui.showToast(error.message || i18n.t("toast.importFailed"), "error");
+        SeatMaster.onboarding?.reportImportError(error.message || i18n.t("toast.importFailed"));
       } finally {
         event.target.value = "";
       }
     });
     document.getElementById("clearPinsButton").addEventListener("click", () => {
+      if (!window.confirm(i18n.t("confirm.clearPins", { count: state.seats.filter((seat) => seat.pin).length }))) return;
+      preserveRecovery();
       state.seats.forEach((seat) => { seat.pin = null; });
       state.assignment = {};
       state.hasDrawn = false;
@@ -1341,7 +1395,8 @@
     });
     document.getElementById("resetButton").addEventListener("click", () => {
       if (!window.confirm(i18n.t("confirm.reset"))) return;
-      storage.clear();
+      preserveRecovery();
+      if (!storage.clear().ok) { ui.showToast(i18n.t("common.saveFailed"), "error"); return; }
       workspace = { version: SeatMaster.constants.VERSION, activeClassId: "class-1", classes: [{ id: "class-1", state: hydrate(SeatMaster.createDefaultState()) }] };
       state = workspace.classes[0].state;
       roomUndoStack = []; roomRedoStack = []; roomRangeEdits.clear();
@@ -1350,12 +1405,22 @@
       selectedAdjustmentSeatId = null;
       saveWorkspace();
       render();
+      SeatMaster.onboarding?.reset();
       ui.showToast(i18n.t("toast.reset"));
+    });
+    document.getElementById("recoverButton").addEventListener("click", () => {
+      if (!recoveryWorkspace) return;
+      const previous = recoveryWorkspace;
+      preserveRecovery();
+      replaceWorkspace(previous);
+      SeatMaster.onboarding?.markMeaningfulActivity();
+      ui.showToast(i18n.t("workflow.recovered"));
     });
   }
 
   function init() {
-    workspace = storage.load() || { version: SeatMaster.constants.VERSION, activeClassId: "class-1", classes: [{ id: "class-1", state: SeatMaster.createDefaultState() }] };
+    const initialWorkspaceSnapshot = storage.load();
+    workspace = initialWorkspaceSnapshot ? JSON.parse(JSON.stringify(initialWorkspaceSnapshot)) : { version: SeatMaster.constants.VERSION, activeClassId: "class-1", classes: [{ id: "class-1", state: SeatMaster.createDefaultState() }] };
     state = hydrate(activeClassEntry().state);
     activeClassEntry().state = state;
     manual = SeatMaster.manualSeating.createController(() => state, (persist = true) => { render({ keepInputs: true }); if (persist) saveSoon(); }, finishManual);
@@ -1363,10 +1428,13 @@
     i18n.apply();
     ui.populateRoomPositionOptions();
     bindEvents();
+    SeatMaster.workflow.init(() => state);
+    SeatMaster.onboarding.init();
     studentPicker = SeatMaster.studentDraw.init(() => state, updateSoundButton);
     groupPlannerUi = SeatMaster.groupUI.create(() => state, saveSoon);
     render();
     saveWorkspace();
+    SeatMaster.onboarding.startIfNeeded({ initialWorkspaceSnapshot });
   }
 
   init();

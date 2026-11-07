@@ -226,10 +226,14 @@
       grid.innerHTML = html.join("");
       const geometryStatus = document.getElementById("roomGeometryStatus");
       if (geometryStatus) {
-        const pathConflictCount = state.roomLayout.tables.filter((table) => state.roomLayout.paths.some((path) => SeatMaster.roomLayout.tableIntersectsPath(table, path))).length;
+        const space = { width: grid.clientWidth, height: grid.clientHeight };
+        const pathConflictCount = state.roomLayout.tables.filter((table) => state.roomLayout.paths.some((path) => SeatMaster.roomLayout.tableIntersectsPath(table, path, 0, space))).length;
+        let tableConflictCount = 0;
+        const tables = state.roomLayout.tables;
+        for (let i = 0; i < tables.length; i++) for (let j = i + 1; j < tables.length; j++) if (SeatMaster.roomLayout.tablesIntersect(tables[i], tables[j], space)) tableConflictCount++;
         geometryStatus.hidden = false;
-        geometryStatus.textContent = collisionCount ? i18n.t("room.seatOverlap", { count: collisionCount }) : pathConflictCount ? i18n.t("room.pathOverlap", { count: pathConflictCount }) : i18n.t("room.geometryOk");
-        geometryStatus.classList.toggle("is-warning", collisionCount > 0 || pathConflictCount > 0);
+        geometryStatus.textContent = collisionCount ? i18n.t("room.seatOverlap", { count: collisionCount }) : pathConflictCount ? i18n.t("room.pathOverlap", { count: pathConflictCount }) : tableConflictCount ? i18n.t("room.tableOverlap", { count: tableConflictCount }) : i18n.t("room.geometryOk");
+        geometryStatus.classList.toggle("is-warning", collisionCount > 0 || pathConflictCount > 0 || tableConflictCount > 0);
       }
       const toolbar = document.getElementById("roomLayoutToolbar");
       if (toolbar) toolbar.hidden = presentation;

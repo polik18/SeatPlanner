@@ -118,14 +118,14 @@
   }
 
   function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
-  function tableIntersectsPath(table, path, clearance = 0) {
-    return polygonsIntersect(tablePolygon(table, clearance), tablePolygon({ x: Number(path.x) + Number(path.width) / 2, y: Number(path.y) + Number(path.height) / 2, width: Number(path.width), height: Number(path.height), rotation: 0 }));
+  function tableIntersectsPath(table, path, clearance = 0, space) {
+    return polygonsIntersect(tablePolygon(table, clearance, space), tablePolygon({ x: Number(path.x) + Number(path.width) / 2, y: Number(path.y) + Number(path.height) / 2, width: Number(path.width), height: Number(path.height), rotation: 0 }, 0, space));
   }
-  function tablePolygon(table, clearance = 0) {
+  function tablePolygon(table, clearance = 0, space = { width: 100, height: 100 }) {
     const angle = (Number(table.rotation) || 0) * Math.PI / 180;
-    const halfW = Number(table.width) / 2 + clearance;
-    const halfH = Number(table.height) / 2 + clearance;
-    return [[-halfW, -halfH], [halfW, -halfH], [halfW, halfH], [-halfW, halfH]].map(([x, y]) => ({ x: Number(table.x) + x * Math.cos(angle) - y * Math.sin(angle), y: Number(table.y) + x * Math.sin(angle) + y * Math.cos(angle) }));
+    const halfW = (Number(table.width) / 2 + clearance) * space.width / 100;
+    const halfH = (Number(table.height) / 2 + clearance) * space.height / 100;
+    return [[-halfW, -halfH], [halfW, -halfH], [halfW, halfH], [-halfW, halfH]].map(([x, y]) => ({ x: Number(table.x) * space.width / 100 + x * Math.cos(angle) - y * Math.sin(angle), y: Number(table.y) * space.height / 100 + x * Math.sin(angle) + y * Math.cos(angle) }));
   }
   function polygonsIntersect(a, b) {
     for (const polygon of [a, b]) for (let i = 0; i < polygon.length; i += 1) {
@@ -137,7 +137,7 @@
     }
     return true;
   }
-  function tablesIntersect(a, b) { return polygonsIntersect(tablePolygon(a), tablePolygon(b)); }
+  function tablesIntersect(a, b, space) { return polygonsIntersect(tablePolygon(a, 0, space), tablePolygon(b, 0, space)); }
   function normalizeAngle(value) { return ((Number(value) || 0) % 360 + 360) % 360; }
   function normalizeEdgeCounts(value) {
     if (!value || typeof value !== "object") return null;
