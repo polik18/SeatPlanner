@@ -1,0 +1,162 @@
+{
+  "date": "2026-11-07T02:41:09.131409+00:00",
+  "browserRequested": true,
+  "results": [
+    {
+      "command": [
+        "node",
+        "tests\\class-library.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "class library v1-v5 migration, snapshots, identity, quota and corrupt-storage tests passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\constrained-arranger.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "constrained solver: oracle, repeated draws, fixed conflicts, timeout, cancellation and 30-student cases passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\effects.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "effects tests passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\engine.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "engine tests passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\group-planner.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "group planner tests passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\manual.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "manual seating tests passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\onboarding.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "onboarding decision matrix passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\reliability.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "reliability tests passed (gender feasibility exhaustive through 34 students)\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\room-layout.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "room layout tests passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\seating-constraints.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "seating constraints: eight directions, aisles, tables, adjacency and geometry invalidation passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "E:\\Git\\SeatPlanner-main\\.venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "E:\\Git\\SeatPlanner-main\\tests\\manual-browser.py"
+      ],
+      "exitCode": 0,
+      "stdout": "{\"status\": \"passed\", \"screenshots\": \"C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\seatplanner-manual-d9n4k607\", \"page_errors\": []}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "E:\\Git\\SeatPlanner-main\\.venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "E:\\Git\\SeatPlanner-main\\tests\\features-browser.py"
+      ],
+      "exitCode": 0,
+      "stdout": "{\"status\": \"passed\", \"page_errors\": []}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "E:\\Git\\SeatPlanner-main\\.venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "E:\\Git\\SeatPlanner-main\\tests\\onboarding-browser.py"
+      ],
+      "exitCode": 0,
+      "stdout": "onboarding browser matrix passed; screenshots: E:\\Git\\SeatPlanner-main\\test-results\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "E:\\Git\\SeatPlanner-main\\.venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "E:\\Git\\SeatPlanner-main\\tests\\inclusive-browser.py"
+      ],
+      "exitCode": 0,
+      "stdout": "inclusive privacy, backups, room preservation and geometry browser tests passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "E:\\Git\\SeatPlanner-main\\.venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "E:\\Git\\SeatPlanner-main\\tests\\class-records-browser.py"
+      ],
+      "exitCode": 0,
+      "stdout": "class records browser: disk reopen, snapshots, quota rollback, archive, identity and portable class backup passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "E:\\Git\\SeatPlanner-main\\.venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "E:\\Git\\SeatPlanner-main\\tests\\seating-constraints-browser.py"
+      ],
+      "exitCode": 0,
+      "stdout": "separation browser: repeated draws, projection privacy, manual/swaps, infeasibility and topology enforcement passed\n",
+      "stderr": ""
+    }
+  ]
+}
