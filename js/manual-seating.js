@@ -70,6 +70,12 @@
     function commit(assignment, nextSelected, message) {
       const state = getState();
       if (JSON.stringify(assignment) === JSON.stringify(state.manualDraft)) return;
+      if(SM.seatingConstraints){
+        const nextReport=SM.seatingConstraints.validateAssignment(state,assignment,{partial:true});
+        const priorReport=SM.seatingConstraints.validateAssignment(state,state.manualDraft||{},{partial:true});
+        const old=new Set(priorReport.violations.map(item=>item.ruleId));
+        if(nextReport.violations.some(item=>!old.has(item.ruleId))){ui.showToast(nextReport.errors.join(" "),"error");return;}
+      }
       undo.push({ assignment: { ...state.manualDraft }, selected });
       if (undo.length > 100) undo.shift();
       redo = [];
@@ -137,7 +143,11 @@
       $("manualProgressBar").max = students.length || 1;
       $("manualProgressBar").value = students.length - pending.length;
       $("manualCurrent").textContent = selected !== null ? t("manual.selected", { student: label(selected) }) : pending.length ? t("manual.chooseFirst") : t("manual.allPlaced");
-      $("manualFinishButton").disabled = pending.length > 0 || !roster.length;
+      const ruleReport=SM.seatingConstraints?.validateAssignment(state,source);
+      $("manualFinishButton").disabled = pending.length > 0 || !roster.length || Boolean(ruleReport&&!ruleReport.valid);
+      const partialReport=SM.seatingConstraints?.validateAssignment(state,source,{partial:true});
+      const ruleStatus=$("manualConstraintStatus");
+      if(ruleStatus){ruleStatus.hidden=!partialReport||partialReport.valid;ruleStatus.textContent=partialReport?.errors.join(" ")||"";$("manualReviewRules").hidden=ruleStatus.hidden;}
       $("manualUndoButton").disabled = !undo.length;
       $("manualRedoButton").disabled = !redo.length;
       $("manualUnseatButton").disabled = !seatsByNumber.has(selected);

@@ -11,7 +11,7 @@ import threading
 from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
-KEY = 'classroom-seat-master:v4'
+KEY = 'classroom-seat-master:v5'
 ARTIFACTS = Path(tempfile.mkdtemp(prefix='seatplanner-manual-'))
 
 class Handler(SimpleHTTPRequestHandler):
@@ -105,6 +105,7 @@ try:
         exported = json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
         assert exported['classes'][0]['state']['manualDraft'] == before
         page.locator('#importFileInput').set_input_files({'name': 'draft.json', 'mimeType': 'application/json', 'buffer': json.dumps(exported).encode()})
+        page.locator('#importCollisionConfirm').click()
         expect(page.locator('#manualPanel')).to_be_visible()
         assert stored(page)['manualDraft'] == before
         # Rotate an unfinished draft and rotate it back.

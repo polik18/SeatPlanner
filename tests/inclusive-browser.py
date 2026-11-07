@@ -7,7 +7,7 @@ import threading
 from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
-KEY = 'classroom-seat-master:v4'
+KEY = 'classroom-seat-master:v5'
 class Handler(SimpleHTTPRequestHandler):
     def log_message(self, *args): pass
 server = ThreadingHTTPServer(('127.0.0.1', 0), partial(Handler, directory=str(ROOT)))

@@ -8,7 +8,7 @@ import threading
 from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
-KEY = "classroom-seat-master:v4"
+KEY = "classroom-seat-master:v5"
 
 def active_state(page):
     return page.evaluate("(key) => { const workspace = JSON.parse(localStorage.getItem(key)); return workspace.classes.find((entry) => entry.id === workspace.activeClassId).state; }", KEY)
@@ -98,6 +98,7 @@ try:
             page.locator("#exportButton").click()
         exported = Path(download_event.value.path()).read_bytes()
         page.locator("#importFileInput").set_input_files({"name": "task-backup.json", "mimeType": "application/json", "buffer": exported})
+        page.locator('#importCollisionConfirm').click()
         page.wait_for_timeout(250)
         assert active_state(page)["activities"][0]["title"] == "臨時任務"
         assert page.locator("#classSelector option").count() == 2

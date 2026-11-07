@@ -1082,9 +1082,37 @@ h2 { margin-bottom: 0; font-size: 18px; letter-spacing: -0.02em; }
 }
 
 #workflowMobileSlot { display: none; }
+.library-dialog { width: min(880px,calc(100vw - 24px)); max-height: 90dvh; padding: 24px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--ink); overflow: auto; }
+.library-dialog::backdrop { background: #182b2180; }
+.library-dialog .dialog-heading { justify-content: space-between; gap: 12px; }
+.library-dialog > p { line-height: 1.8; }
+.library-card { padding: 18px; border: 1px solid var(--line); border-radius: 14px; margin-top: 14px; background: #f6f5ec; }
+.library-card h3 { margin: 0 0 8px; }
+.library-card p { line-height: 1.7; margin-bottom: 8px; }
+.library-card .class-actions { margin-block: 12px; flex-wrap: wrap; }
+.library-card .field { margin-top: 12px; }
+#classRecordStatus { font-size: 12px; line-height: 1.8; margin-block: 14px; color: var(--green); }
+.separation-panel { border: 1px solid #ccd7bf; border-radius: 14px; padding: 14px; margin-bottom: 20px; background: #f8f8ef; }
+.separation-panel p { font-size: 13px; line-height: 1.8; }
+.separation-panel select, .identity-row select, #topologyDialog select { width: 100%; min-height: 42px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: white; font: inherit; }
+.separation-panel input[type="search"] { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.rule-options { display: flex; gap: 18px; flex-wrap: wrap; margin: 14px 0; font-size: 13px; }
+.rule-options label, .separation-rule label { display: flex; align-items: center; gap: 8px; }
+.separation-rule { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 12px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.separation-rule label { flex: 1 1 240px; }
+.is-error, #separationStatus.is-error { color: #982e26; }
+.identity-row { display: grid; grid-template-columns: minmax(100px,1fr) minmax(180px,2fr); gap: 10px; padding: 8px; align-items: center; border-bottom: 1px solid var(--line); }
+#topologyPreview { width: min(100%,520px); margin-inline: auto; background: #f3f4e9; border-radius: 12px; }
+#topologyPreview svg { display: block; width: 100%; max-height: 380px; }
+#topologyEdges { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); max-height: 180px; overflow: auto; gap: 8px; margin-block: 16px; font-size: 12px; }
+#topologyDialog .field-grid { gap: 12px; }
+.constraint-cancel { position: fixed; z-index: 60; bottom: 20px; right: 20px; max-width: calc(100vw - 40px); }
+@media (min-width: 981px) { .header-actions { flex-wrap: wrap; justify-content: flex-end; max-width: 74%; gap: 7px; } body:not(.presentation-mode) .app-shell { height: calc(100dvh - var(--header-height,100px)); } }
+@media (max-width: 620px) { .library-dialog { padding: 16px; } .identity-row { grid-template-columns: 1fr; } .separation-panel .field-grid { grid-template-columns: 1fr; } }
 body:not(.presentation-mode) .presentation-only { display: none !important; }
 .presentation-mode .admin-only { display: none !important; }
 .manual-mode .workflow-card { display: none; }
+.manual-mode .separation-panel { display: none; }
 .high-contrast .seat .student-name, .high-contrast .seat .student-name-only, .high-contrast .seat .student-result > strong { font-size: clamp(22px, 2.4vw, 34px); }
 @media (max-width: 980px) {
   #workflowMobileSlot { display: block; padding: 12px 12px 0; }

@@ -2,6 +2,7 @@
   window.SeatMaster.i18n.addMessages({
     'zh-Hant': {
       'app.title': 'SeatPlanner Inclusive｜共融教室座位與合作學習',
+      'common.saved': '草稿已暫存於此裝置', 'common.saving': '草稿暫存中…', 'summary.noSeat':'不需實體座位',
       'stage.pageTitle': '{className} · 座位編排',
       'common.saveFailed': '儲存失敗，請立即匯出備份',
       'profile.publicOnly': '公開資料卡僅顯示座號與姓名。',
@@ -54,6 +55,7 @@
     },
     en: {
       'app.title': 'SeatPlanner Inclusive | Classroom seating and collaboration',
+      'common.saved': 'Draft autosaved on this device', 'common.saving':'Autosaving draft…', 'summary.noSeat':'No physical seat',
       'stage.pageTitle': '{className} · Seating',
       'common.saveFailed': 'Save failed. Export a backup now.', 'profile.publicOnly': 'Public cards show only student number and name.',
       'admin.dataPlaceholder': 'Number\tName\n1\tAlex\n2\tTaylor', 'admin.dataHelp': 'Paste a spreadsheet with Number and Name headers.',

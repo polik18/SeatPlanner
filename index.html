@@ -16,13 +16,15 @@
       <div class="brand">
         <span class="brand-mark" aria-hidden="true">SI</span>
         <div>
-          <p class="eyebrow">SEATPLANNER INCLUSIVE · 2.0</p>
+          <p class="eyebrow">SEATPLANNER INCLUSIVE · 2.1</p>
           <h1 id="pageTitle">班級座位編排</h1>
         </div>
       </div>
       <div class="header-actions admin-only">
         <span class="save-status" id="saveStatus" aria-live="polite" data-i18n="common.saved">已儲存於本機</span>
         <button class="button button-secondary" id="tutorialButton" type="button" data-i18n="workflow.help">？ 操作教學</button>
+        <button class="button button-secondary" id="classLibraryButton" type="button" data-v5="我的班級|My classes">我的班級</button>
+        <button class="button button-primary" id="saveClassButton" type="button" data-v5="儲存班級|Save class">儲存班級</button>
         <button class="button button-secondary language-button" type="button"><span data-language-label>EN</span></button>
         <button class="button button-secondary" id="fullscreenButton" type="button" data-i18n="common.fullscreen">全螢幕</button>
         <button class="button button-secondary student-draw-open" type="button" data-i18n="picker.title">抽學生</button>
@@ -60,6 +62,8 @@
         <progress id="manualProgressBar" aria-label="排位進度" data-i18n-aria-label="manual.progressLabel" max="1" value="0"></progress>
         <details class="manual-rules"><summary data-i18n="manual.rulesTitle">手動排位說明</summary><p class="manual-instructions" data-i18n="manual.instructions">選學生 → 點座位。也可拖曳；點已排學生可移動或交換。</p><p class="manual-rules-note" data-i18n="manual.rulesNote">沿用目前結果或預排位置起步。手動排位由老師決定，不套用抽籤的性別與固定限制；走道不能坐人。</p></details>
         <p id="manualCapacity" class="manual-capacity" role="alert" hidden></p>
+        <p id="manualConstraintStatus" class="manual-capacity" role="alert" hidden></p>
+        <button id="manualReviewRules" class="button button-secondary" type="button" hidden data-v5="回到規則設定|Review seating rules"></button>
         <label class="field"><span class="visually-hidden" data-i18n="manual.search">搜尋座號或姓名</span><input id="manualSearch" type="search" autocomplete="off" placeholder="搜尋座號／姓名" data-i18n-placeholder="manual.search" /></label>
         <div class="manual-filters" role="group" aria-label="名單篩選" data-i18n-aria-label="manual.filterLabel">
           <button type="button" data-manual-filter="pending" aria-pressed="true" data-i18n="manual.pending">待排學生</button>
@@ -101,6 +105,10 @@
             <button class="button button-quiet" id="deleteClassButton" type="button" data-i18n="classes.delete">刪除目前班級</button>
           </div>
           <small data-i18n="classes.help">每個班級各自保留名單、版型與抽籤結果；匯出會包含全部班級。</small>
+          <p id="classRecordStatus" role="status"></p>
+          <p id="classStorageError" class="is-error" role="alert" hidden></p>
+          <div class="field-grid"><label class="field"><span data-v5="學年度（選填）|Academic year (optional)"></span><input id="classAcademicYear" maxlength="20" /></label><label class="field"><span data-v5="學期（選填）|Term (optional)"></span><input id="classTerm" maxlength="20" /></label></div>
+          <button id="backupClassButton" class="button button-secondary" type="button" data-v5="備份此班完整檔案|Back up this class"></button>
         </section>
         <section class="panel-section">
           <div class="section-heading">
@@ -425,6 +433,16 @@
             <span id="prearrangeCount">已預排 0 人</span>
           </div>
         </div>
+        <section id="separationPanel" class="separation-panel admin-only" aria-labelledby="separationTitle">
+          <details id="separationDetails"><summary id="separationTitle" data-v5="同儕分開安排｜抽位必須遵守|Separation rules · enforced in draws"></summary>
+            <p data-v5="不相鄰包含左右、前後及斜角。不同桌組是另一項規則；只用於日常座位，不限制活動分組。|Nonadjacent includes horizontal, vertical and diagonal neighbors. Different tables is a separate rule. These rules apply to daily seating, not activity groups."></p>
+            <input id="ruleSearch" type="search" aria-label="搜尋學生 / Search students" placeholder="搜尋學生 / Search students" />
+            <div class="field-grid"><label class="field"><span data-v5="學生 A|Student A"></span><select id="ruleStudentA"></select></label><label class="field"><span data-v5="學生 B|Student B"></span><select id="ruleStudentB"></select></label></div>
+            <div class="rule-options"><label><input id="ruleNotAdjacent" type="checkbox" checked /><span data-v5="不相鄰（八方向）|Not adjacent (eight directions)"></span></label><label><input id="ruleNotSameTable" type="checkbox" /><span data-v5="不同桌組|Different tables"></span></label></div>
+            <div class="class-actions"><button id="saveSeparationRule" class="button button-primary" type="button" data-v5="新增／更新規則|Add / update rule"></button><button id="constraintRedrawButton" class="button button-primary" type="button" data-v5="依目前規則重新抽位|Draw with current rules"></button><button id="openTopologyButton" class="button button-secondary" type="button" data-v5="預覽／確認座位鄰接圖|Preview / confirm adjacency"></button><button id="reviewRosterButton" class="button button-secondary" type="button" data-v5="學生身分對照|Student identity mapping"></button></div>
+            <p id="separationStatus" role="status" aria-live="polite"></p><div id="separationRules"></div>
+          </details>
+        </section>
 
         <div class="room-layout" id="roomLayout">
           <div class="room-edge room-edge-top">
@@ -603,14 +621,24 @@
     </section>
     <dialog id="readyDialog" class="simple-dialog" aria-labelledby="readyTitle"><h2 id="readyTitle" data-i18n="tour.ready"></h2><p data-i18n="tour.readyText"></p><button id="readyCreate" class="button button-primary" type="button" data-i18n="tour.create"></button></dialog>
     <dialog id="observationDialog" class="simple-dialog observation-dialog" aria-labelledby="observationTitle"><h2 id="observationTitle" data-i18n="support.observationTitle"></h2><pre data-i18n="support.observationText"></pre><div class="dialog-actions"><button class="button button-secondary" id="observationClose" type="button" data-i18n="support.close"></button><button class="button button-primary" id="observationPrint" type="button" data-i18n="support.print"></button></div></dialog>
+    <dialog id="classLibraryDialog" class="library-dialog" aria-labelledby="classLibraryTitle"><div class="dialog-heading"><h2 id="classLibraryTitle" data-v5="我的班級與排位紀錄|My classes and seating records"></h2><button class="button button-secondary" type="button" data-close-v5="classLibraryDialog" data-v5="關閉|Close"></button></div><p data-v5="自動暫存用來接續工作；具名紀錄可還原完整版本。單班檔可帶到別的裝置。|Autosave resumes your work; named records restore complete versions. A class backup can be opened on another device."></p><label><input id="showArchivedClasses" type="checkbox" /><span data-v5="顯示封存班級|Show archived classes"></span></label><div id="classLibraryList"></div></dialog>
+    <dialog id="saveClassDialog" class="simple-dialog" aria-labelledby="saveClassTitle"><h2 id="saveClassTitle" data-v5="儲存班級紀錄|Save a class record"></h2><label class="field"><span data-v5="紀錄名稱，例如：11 月座位|Record name, e.g. November seating"></span><input id="classRecordName" maxlength="80" /></label><p data-v5="保存名單、教室、規則、排位、草稿及活動。規劃衝突可保存，但不能完成展示。|Saves roster, room, rules, seating, draft and activities. Conflicting plans may be saved, but cannot be presented as complete."></p><div class="dialog-actions"><button class="button button-secondary" data-close-v5="saveClassDialog" type="button" data-v5="取消|Cancel"></button><button class="button button-primary" id="saveClassRecordButton" type="button" data-v5="儲存紀錄|Save record"></button></div></dialog>
+    <dialog id="copyClassDialog" class="simple-dialog" aria-labelledby="copyClassTitle"><h2 id="copyClassTitle" data-v5="複製班級|Copy class"></h2><label class="field"><span data-v5="內容|Contents"></span><select id="copyClassContents"><option value="layout" data-v5="只複製教室（不複製名單與規則）|Classroom only (no roster or rules)"></option><option value="all" data-v5="連名單、規則、排位一起複製|Copy roster, rules and seating too"></option></select></label><div class="dialog-actions"><button class="button button-secondary" data-close-v5="copyClassDialog" type="button" data-v5="取消|Cancel"></button><button id="copyClassConfirm" class="button button-primary" type="button" data-v5="建立副本|Create copy"></button></div></dialog>
+    <dialog id="rosterIdentityDialog" class="library-dialog" aria-labelledby="rosterIdentityTitle"><h2 id="rosterIdentityTitle" data-v5="確認學生身分與座號對照|Confirm student identities and numbers"></h2><p data-v5="改座號或更正姓名，選擇原學生以保留規則；換成新學生則選新身分。不能只憑同名認定。|For a number/name correction choose the original student to retain rules. For a new student choose New identity. Names alone do not establish identity."></p><div id="rosterIdentityRows"></div><p id="rosterIdentityError" role="alert"></p><div class="dialog-actions"><button class="button button-secondary" type="button" data-close-v5="rosterIdentityDialog" data-v5="取消|Cancel"></button><button id="rosterIdentityConfirm" class="button button-primary" type="button" data-v5="確認對照|Confirm mapping"></button></div></dialog>
+    <dialog id="topologyDialog" class="library-dialog" aria-labelledby="topologyTitle"><div class="dialog-heading"><h2 id="topologyTitle" data-v5="座位鄰接預覽|Seat adjacency preview"></h2><button class="button button-secondary" data-close-v5="topologyDialog" type="button" data-v5="關閉|Close"></button></div><p data-v5="線段代表視為相鄰。自由桌型的建議需由老師檢查，可取消勾選或加連線；圖示不代表實際公尺距離。|Lines mean adjacent seats. Review the free-layout suggestions: remove or add edges as needed. This diagram does not represent distances in meters."></p><div id="topologyPreview"></div><div id="topologyEdges"></div><div class="field-grid"><select id="topologySeatA" aria-label="座位 A / Seat A"></select><select id="topologySeatB" aria-label="座位 B / Seat B"></select></div><div class="class-actions"><button id="topologyAddEdge" class="button button-secondary" type="button" data-v5="新增鄰接連線|Add adjacency edge"></button><button id="topologySuggest" class="button button-secondary" type="button" data-v5="重新產生建議|Generate suggestions"></button><button id="topologyConfirm" class="button button-primary" type="button" data-v5="確認此教室的鄰接圖|Confirm this adjacency map"></button></div><p id="topologyNotice" role="status"></p></dialog>
+    <dialog id="importCollisionDialog" class="simple-dialog" aria-labelledby="importCollisionTitle"><h2 id="importCollisionTitle" data-v5="同一班級的檔案|An existing class was found"></h2><p data-v5="更新原班會先保留目前版本；也可選擇另建班級，不覆蓋原班。|Updating first preserves the current version. Alternatively, create another class without replacing the original."></p><div id="importCollisionRows"></div><div class="dialog-actions"><button class="button button-secondary" data-close-v5="importCollisionDialog" type="button" data-v5="取消|Cancel"></button><button id="importCollisionConfirm" class="button button-primary" type="button" data-v5="確認匯入|Confirm import"></button></div></dialog>
+    <button id="cancelConstraintDraw" class="button button-secondary constraint-cancel" type="button" hidden data-v5="取消計算，保留原排位|Cancel calculation; keep previous seating"></button>
 
     <script src="js/constants.js"></script>
     <script src="js/i18n.js"></script>
     <script src="js/inclusive-i18n.js"></script>
-    <script src="js/storage.js"></script>
     <script src="js/seat-engine.js"></script>
+    <script src="js/class-data.js"></script>
+    <script src="js/storage.js"></script>
     <script src="js/group-planner.js"></script>
     <script src="js/room-layout.js"></script>
+    <script src="js/seating-constraints.js"></script>
+    <script src="js/constrained-arranger.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/group-ui.js"></script>
     <script src="js/sound.js"></script>
@@ -620,6 +648,8 @@
     <script src="js/workflow.js"></script>
     <script src="js/student-draw.js"></script>
     <script src="js/manual-seating.js"></script>
+    <script src="js/class-records-ui.js"></script>
+    <script src="js/separation-ui.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

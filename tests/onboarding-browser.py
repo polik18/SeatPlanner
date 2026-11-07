@@ -9,7 +9,7 @@ from playwright.sync_api import sync_playwright, expect
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / 'test-results'
 ARTIFACTS.mkdir(exist_ok=True)
-KEY = 'classroom-seat-master:v4'
+KEY = 'classroom-seat-master:v5'
 META = 'seatplanner:ui-onboarding:v1'
 
 class Handler(SimpleHTTPRequestHandler):
@@ -108,7 +108,7 @@ try:
             page.evaluate('([key, meta, data]) => { localStorage.clear(); localStorage.setItem(key, JSON.stringify(data)); }', [KEY, META, data])
             page.reload()
             expect(page.locator('#welcomeDialog')).not_to_be_visible()
-            assert workspace(page)['version'] == 4
+            assert workspace(page)['version'] == 5
 
         # Deleting a class does not reset tutorial state. Full reset does; undo restores data.
         import_file(page, fixture('multi-v4'))

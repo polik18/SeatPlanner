@@ -21,6 +21,32 @@
   let roomRedoStack = [];
   const roomRangeEdits = new Set();
   let recoveryWorkspace = null;
+  let pendingSolve = null;
+  let updatingRoster = false;
+  function reportStorageResult(result){
+    const node=document.getElementById("classStorageError");
+    node.hidden=result.ok;
+    node.textContent=result.ok?"":SeatMaster.seatingConstraints.say(`此次未能保存 ${workspace.classes.length} 個班級${result.bytes?`（約 ${Math.ceil(result.bytes/1024)} KiB）`:""}。原已存資料保留；請先下載備份，再於「我的班級」選擇清理紀錄。`,`Could not save ${workspace.classes.length} classes${result.bytes?` (about ${Math.ceil(result.bytes/1024)} KiB)`:""}. Previously saved data is kept. Download a backup, then choose records to remove in My classes.`);
+    document.getElementById("saveStatus").classList.toggle("is-error",!result.ok);
+  }
+
+  function commitWorkspace(mutator) {
+    syncActiveClass();
+    const candidate = SeatMaster.classData.clone(workspace);
+    try { mutator(candidate); candidate.classes.forEach(SeatMaster.classData.initializeEntry); }
+    catch (error) { ui.showToast(error.message, "error"); return false; }
+    const result = storage.save(candidate);
+    reportStorageResult(result);
+    if (!result.ok) { ui.setSaveStatus(i18n.t("common.saveFailed")); ui.showToast(i18n.t("common.saveFailed"), "error"); return false; }
+    preserveRecovery();
+    const oldLayout = JSON.stringify(state.roomLayout), oldDraft = JSON.stringify(state.manualDraft);
+    workspace = candidate; state = hydrate(activeClassEntry().state); activeClassEntry().state = state;
+    if (JSON.stringify(state.roomLayout) !== oldLayout) { roomUndoStack=[]; roomRedoStack=[]; selectedTableId=state.roomLayout?.selectedTableId || null; selectedPathId=state.roomLayout?.selectedPathId || null; }
+    if (JSON.stringify(state.manualDraft) !== oldDraft) manual.reset();
+    adminMode=state.adminMode;
+    render(); ui.setSaveStatus(i18n.t("common.saved")); SeatMaster.onboarding?.markMeaningfulActivity();
+    return true;
+  }
 
   function preserveRecovery() {
     syncActiveClass();
@@ -54,10 +80,7 @@
   }
 
   function makeClassId() {
-    const used = new Set((workspace?.classes || []).map((entry) => entry.id));
-    let suffix = 1;
-    while (used.has(`class-${suffix}`)) suffix += 1;
-    return `class-${suffix}`;
+    return SeatMaster.classData.id();
   }
 
   function activeClassEntry() {
@@ -71,9 +94,12 @@
 
   function saveWorkspace() {
     syncActiveClass();
+    workspace.classes.forEach(SeatMaster.classData.initializeEntry);
     const result = storage.save(workspace);
+    reportStorageResult(result);
     ui.setSaveStatus(i18n.t(result.ok ? "common.saved" : "common.saveFailed"));
     document.getElementById("saveStatus").classList.toggle("is-error", !result.ok);
+    SeatMaster.classRecordsUI?.render();
     return result;
   }
 
@@ -108,6 +134,7 @@
 
   function hasUntouchedDemoClass() {
     if (!workspace || workspace.classes.length !== 1) return false;
+    if (state.seatingConstraints?.pairs.length || state.studentDrawRound?.history.length || activeClassEntry().records?.some(record=>record.savedAt) || activeClassEntry().meta?.academicYear || activeClassEntry().meta?.term) return false;
     const demo = hydrate(SeatMaster.createDefaultState());
     return JSON.stringify(classStateSnapshot(state)) === JSON.stringify(classStateSnapshot(demo));
   }
@@ -116,7 +143,7 @@
     return Boolean(draft) && typeof draft === "object" && Object.values(draft).some((value) => value !== null && value !== undefined);
   }
 
-  function replaceWorkspace(incoming) {
+  function replaceWorkspace(incoming, persist = true) {
     workspace = incoming;
     state = hydrate(activeClassEntry().state);
     activeClassEntry().state = state;
@@ -127,11 +154,12 @@
     adminMode = hasDraftProgress(state.manualDraft) ? "manual" : state.adminMode;
     manual.reset();
     render();
-    saveWorkspace();
+    if (persist) saveWorkspace();
   }
 
   function switchClass(id) {
     if (!workspace || id === workspace.activeClassId || !workspace.classes.some((entry) => entry.id === id)) return;
+    pendingSolve?.abort();
     closeStudentProfile();
     if (seatTimeline) seatTimeline.cancel();
     document.body.classList.remove("drawing-mode", "presentation-mode");
@@ -149,12 +177,17 @@
     saveWorkspace();
   }
 
-  function addClass(copyCurrent = false) {
+  function addClass(copyCurrent = false, layoutOnly = false) {
     SeatMaster.onboarding?.markMeaningfulActivity();
     const source = copyCurrent ? JSON.parse(JSON.stringify(state)) : SeatMaster.createDefaultState();
+    if (layoutOnly) {
+      source.config={...state.config,studentData:"",maxNumber:1,emptyNumbers:"1",seatExcludedNumbers:"",femaleStart:2};
+      source.seats=state.seats.map(seat=>({...seat,pin:null})); source.roomLayout=SeatMaster.classData.clone(state.roomLayout);
+    }
+    source.studentDrawRound=null;
     const number = workspace.classes.length + 1;
     source.config = { ...source.config, className: copyCurrent ? `${source.config.className || i18n.t("common.untitled")} ${i18n.t("classes.copySuffix")}` : i18n.t("classes.newName", { number }) };
-    const entry = { id: makeClassId(), state: hydrate(source) };
+    const entry = SeatMaster.classData.initializeEntry({ id: makeClassId(), state: hydrate(source) });
     workspace.classes.push(entry);
     syncActiveClass();
     workspace.activeClassId = entry.id;
@@ -189,21 +222,25 @@
     saveWorkspace();
   }
 
-  function importClasses(incoming) {
+  async function importClasses(incoming) {
     if (!incoming?.classes?.length) return;
-    if (hasUntouchedDemoClass()) { replaceWorkspace(incoming); return; }
-    syncActiveClass();
-    const used = new Set(workspace.classes.map((entry) => entry.id));
-    let suffix = 1;
-    const imported = incoming.classes.map((entry) => {
-      while (used.has(`class-${suffix}`)) suffix += 1;
-      const id = `class-${suffix}`;
-      used.add(id);
-      suffix += 1;
-      return { id, state: hydrate(entry.state) };
+    if (hasUntouchedDemoClass()) return commitWorkspace(candidate=>Object.assign(candidate,incoming));
+    const choices=await SeatMaster.classRecordsUI.chooseImport(incoming);
+    if (!choices) return false;
+    return commitWorkspace(candidate=>{
+      let firstImportedId=null;
+      for(const source of incoming.classes){
+        const existing=candidate.classes.find(entry=>entry.id===source.id), copy=SeatMaster.classData.clone(source);
+        if(hasDraftProgress(copy.state.manualDraft))copy.state.adminMode="manual";
+        if(existing&&choices[source.id]==="update"){
+          SeatMaster.classData.addRecord(existing,SeatMaster.seatingConstraints.say("匯入更新前的草稿","Draft before import update"));
+          const used=new Map(existing.records.map(record=>[record.id,record]));
+          for(const record of copy.records){if(used.has(record.id)&&SeatMaster.classData.content(used.get(record.id).state)!==SeatMaster.classData.content(record.state))record.id=SeatMaster.classData.id();used.set(record.id,record);}
+          copy.records=[...used.values()];Object.assign(existing,copy);firstImportedId ||= existing.id;
+        }else{if(existing)copy.id=makeClassId();candidate.classes.push(copy);firstImportedId ||= copy.id;}
+      }
+      candidate.activeClassId=firstImportedId;
     });
-    workspace.classes.push(...imported);
-    switchClass(imported[0].id);
   }
 
   function roomEditSnapshot() {
@@ -269,6 +306,8 @@
     const hydrated = { version: SeatMaster.constants.VERSION, config, seats, assignment: resultValid ? assignment : {}, hasDrawn: resultValid,
       resultSource: rawState && rawState.resultSource === "manual" ? "manual" : "draw", manualDraft: null,
       activities: Array.isArray(rawState && rawState.activities) ? rawState.activities : [], roomLayout };
+    for(const key of ["rosterIdentity","seatingConstraints","seatTopology","studentDrawRound"]) if(rawState?.[key]!==undefined) hydrated[key]=SeatMaster.classData.clone(rawState[key]);
+    SeatMaster.classData.ensure(hydrated);
     if (rawState && rawState.manualDraft && typeof rawState.manualDraft === "object") hydrated.manualDraft = SeatMaster.manualSeating.normalize(hydrated, rawState.manualDraft);
     hydrated.adminMode = ["layout", "prearrange", "manual", "adjust"].includes(rawState && rawState.adminMode) ? rawState.adminMode : hydrated.manualDraft ? "manual" : "layout";
     if (hydrated.adminMode === "adjust" && !resultValid) hydrated.adminMode = "layout";
@@ -286,6 +325,10 @@
   }
 
   function render(options) {
+    if(document.body.classList.contains("presentation-mode")&&state.hasDrawn&&!options?.concealResult){
+      const report=SeatMaster.seatingConstraints.validateAssignment(state,state.assignment);
+      if(!report.valid){seatTimeline?.cancel();document.body.classList.remove("presentation-mode","drawing-mode");ui.showToast(report.errors.join(" "),"error");}
+    }
     const focusedSeat = document.activeElement.closest(".seat")?.dataset.seatId;
     const presentation = document.body.classList.contains("presentation-mode");
     if (!options || !options.keepInputs) ui.fillInputs(state);
@@ -294,7 +337,7 @@
     if (manualActive && !state.manualDraft) manual.start();
     ui.renderSummary(manualActive ? { ...state, seats: state.seats.map((s) => ({ ...s, pin: null, type: s.type === "aisle" ? "aisle" : "general" })) } : state);
     ui.renderRoomMarkers(state);
-    ui.renderSeatGrid(state, presentation, adminMode, selectedAdjustmentSeatId);
+    ui.renderSeatGrid(options?.concealResult?{...state,hasDrawn:false}:state, presentation, adminMode, selectedAdjustmentSeatId);
     document.getElementById("roomUndoButton").disabled = !roomUndoStack.length;
     document.getElementById("roomRedoButton").disabled = !roomRedoStack.length;
     updateAdminModeUI();
@@ -302,6 +345,9 @@
     if (manualActive && focusedSeat) document.querySelector(`.seat[data-seat-id="${focusedSeat}"]`)?.focus({ preventScroll: true });
     ui.positionValidationNotice();
     SeatMaster.workflow?.render(state);
+    SeatMaster.classRecordsUI?.render();
+    SeatMaster.separationUI?.render();
+    document.documentElement.style.setProperty("--header-height",document.querySelector(".app-header").offsetHeight+"px");
   }
 
   function updateAdminModeUI() {
@@ -379,9 +425,21 @@
     }
   }
 
-  function updateFromInputs() {
+  async function updateFromInputs() {
+    if (updatingRoster) return;
     const config = readConfigFromInputs();
     const previous = state.config;
+    let identityChoices = null;
+    const rosterChanged=SeatMaster.classData.rosterChanged(state,config);
+    const proposedIdentities=rosterChanged?SeatMaster.classData.identityChoices(state,config):[];
+    const oldActive=state.rosterIdentity.filter(row=>row.number!==null), newNumbers=new Set(proposedIdentities.map(row=>row.number));
+    const ambiguousIdentity=proposedIdentities.some(row=>!row.studentId&&(oldActive.some(old=>old.number===row.number)||oldActive.some(old=>!newNumbers.has(old.number))));
+    if(rosterChanged&&ambiguousIdentity&&(state.seatingConstraints.pairs.length||state.hasDrawn||Object.values(state.manualDraft||{}).some(Number.isInteger))){
+      updatingRoster=true;
+      identityChoices=await SeatMaster.classRecordsUI.reviewRoster(config);
+      updatingRoster=false;
+      if(!identityChoices){ui.fillInputs(state);return;}
+    }
     const cosmeticOnly = ["rows", "cols", "maxNumber", "emptyNumbers", "femaleStart", "studentData", "seatExcludedNumbers"].every((key) => previous[key] === config[key]);
     if (!cosmeticOnly && (state.hasDrawn || state.manualDraft || state.seats.some((seat) => seat.pin))) {
       const prospective = state.roomLayout ? state.seats : engine.buildSeatGrid(config, state.seats);
@@ -391,7 +449,8 @@
       if (!window.confirm(i18n.t("confirm.layoutPreview", { before: state.seats.filter(seat => seat.type !== "aisle").length, after: nextIds.size, students: nextStudents.size, affected }))) { ui.fillInputs(state); return; }
       preserveRecovery();
     }
-    state.config = config;
+    if(rosterChanged) SeatMaster.classData.applyIdentity(state,config,identityChoices || SeatMaster.classData.identityChoices(state,config));
+    else state.config = config;
     if (cosmeticOnly) { render(); saveSoon(); return; }
     if (!state.roomLayout) state.seats = engine.buildSeatGrid(config, state.seats);
     const validNumbers = new Set(engine.studentsRequiringSeats(config).map((student) => student.number));
@@ -756,6 +815,9 @@
     if ((state.hasDrawn || state.manualDraft) && !window.confirm(i18n.t("confirm.changeLayout"))) return;
     preserveRecovery();
     const value = Number.parseInt(document.getElementById("pinStudentSelect").value, 10);
+    const proposed=Object.fromEntries(state.seats.filter(item=>item.id===seat.id?Number.isInteger(value):item.pin).map(item=>[item.id,item.id===seat.id?value:item.pin]));
+    const report=SeatMaster.seatingConstraints.validateAssignment(state,proposed,{partial:true});
+    if(!report.valid){ui.showToast(report.errors.join(" "),"error");return false;}
     seat.pin = Number.isInteger(value) ? value : null;
     state.assignment = {};
     state.hasDrawn = false;
@@ -765,12 +827,15 @@
     render({ keepInputs: true });
     saveSoon();
     if (engine.validate(state).valid) ui.showToast(seat.pin ? i18n.t("toast.pinned", { number: seat.pin }) : i18n.t("toast.unpinned"));
+    return true;
   }
 
   function finishManual() {
     state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
     const pending = SeatMaster.manualSeating.remaining(state, state.manualDraft);
     if (pending.length) { ui.showToast(i18n.t("manual.incomplete", { count: pending.length }), "error"); return; }
+    const report=SeatMaster.seatingConstraints.validateAssignment(state,state.manualDraft);
+    if(!report.valid){ui.showToast(report.errors.join(" "),"error");return;}
     state.assignment = { ...state.manualDraft };
     state.hasDrawn = true;
     state.resultSource = "manual";
@@ -783,6 +848,7 @@
 
   function enterPresentation() {
     if (adminMode === "manual") { finishManual(); return; }
+    if(state.hasDrawn){const constraints=SeatMaster.seatingConstraints.validateAssignment(state,state.assignment);if(!constraints.valid){ui.showToast(constraints.errors.join(" "),"error");return;}}
     const report = state.hasDrawn && state.resultSource === "manual" ? { valid: true } : engine.validate(state);
     if (!report.valid) {
       ui.showToast(i18n.t("toast.fixFirst"), "error");
@@ -804,6 +870,7 @@
   }
 
   function exitPresentation() {
+    pendingSolve?.abort();
     closeStudentProfile();
     if (seatTimeline) seatTimeline.cancel();
     seatTimeline = null;
@@ -903,6 +970,9 @@
     }
     const firstId = selectedAdjustmentSeatId;
     const firstSeat = state.seats.find((item) => item.id === firstId);
+    const proposed={...state.assignment,[firstId]:state.assignment[seatId],[seatId]:state.assignment[firstId]};
+    const report=SeatMaster.seatingConstraints.validateAssignment(state,proposed);
+    if(!report.valid){selectedAdjustmentSeatId=null;render({keepInputs:true});ui.showToast(report.errors.join(" "),"error");return;}
     [state.assignment[firstId], state.assignment[seatId]] = [state.assignment[seatId], state.assignment[firstId]];
     selectedAdjustmentSeatId = null;
     render({ keepInputs: true });
@@ -932,15 +1002,28 @@
     document.getElementById("drawButton").classList.remove("is-drawing");
   }
 
-  function startDraw() {
-    if (document.body.classList.contains("drawing-mode")) return;
+  async function startDraw() {
+    if (document.body.classList.contains("drawing-mode") || pendingSolve) return;
     closeStudentProfile();
     let assignment;
+    const snapshot=SeatMaster.classData.clone(state), stamp=SeatMaster.classData.content(storage.serializableState(state));
+    const request=new AbortController();pendingSolve=request;
+    document.getElementById("drawButton").disabled=true;
+    document.getElementById("cancelConstraintDraw").hidden=false;
     try {
-      assignment = engine.arrange(state);
+      const result=await SeatMaster.constrainedArranger.solve(snapshot,{signal:request.signal});
+      if(result.status==="cancelled")return;
+      if(result.status!=="solved"){
+        const message=result.status==="timeout"?SeatMaster.seatingConstraints.say("尚未找到符合結果，可再次計算或調整規則；並非已證明無解。","No solution found within the calculation budget. Retry or adjust rules; this is not proof of infeasibility."):(result.errors||[]).join(" ");
+        ui.showToast(message,"error");document.getElementById("drawMessage").textContent=message;return;
+      }
+      if(request.signal.aborted || stamp!==SeatMaster.classData.content(storage.serializableState(state)))return;
+      assignment=result.assignment;
     } catch (error) {
       ui.showToast(error.message.split("\n")[0], "error");
       return;
+    } finally {
+      if(pendingSolve===request){pendingSolve=null;document.getElementById("drawButton").disabled=false;document.getElementById("cancelConstraintDraw").hidden=true;}
     }
 
     const button = document.getElementById("drawButton");
@@ -950,12 +1033,13 @@
     if (seatTimeline) seatTimeline.cancel();
     resetDrawEffects();
     document.body.classList.add("drawing-mode");
+    document.body.classList.add("presentation-mode");
     setPresentationRotationDisabled(true);
     button.disabled = true;
     button.classList.add("is-drawing");
     message.textContent = i18n.t("draw.drawing");
 
-    render({ keepInputs: true });
+    render({ keepInputs: true, concealResult: true });
     ui.renderSeatGrid({ ...state, hasDrawn: false }, true, adminMode, null);
     document.getElementById("skipDrawButton").hidden = false;
     // Keep the previous assignment until the new result is actually revealed.
@@ -980,6 +1064,8 @@
         seatElements.forEach((element, index) => ui.renderRollingValue(element, state, samples[index % samples.length] || null, directory));
       },
       onReveal() {
+        const report=SeatMaster.seatingConstraints.validateAssignment(state,assignment);
+        if(stamp!==SeatMaster.classData.content(storage.serializableState(state)) || !report.valid){resetDrawEffects();ui.showToast(SeatMaster.seatingConstraints.say("條件已變更，原排位保留，請重新計算。","Conditions changed. Previous seating is kept; calculate again."),"error");return;}
         state.assignment = assignment;
         state.hasDrawn = true;
         state.resultSource = "draw";
@@ -1322,13 +1408,16 @@
     });
 
     document.getElementById("pinForm").addEventListener("submit", (event) => {
-      if (event.submitter && event.submitter.value === "default") applyPin();
+      if (event.submitter && event.submitter.value === "default" && applyPin()===false) event.preventDefault();
     });
     document.getElementById("manualStartButton").addEventListener("click", () => { setAdminMode("manual"); document.getElementById("manualPanel").scrollIntoView({ block: "start" }); });
+    document.getElementById("manualReviewRules").addEventListener("click",()=>{setAdminMode("prearrange");document.getElementById("separationDetails").open=true;document.getElementById("separationPanel").scrollIntoView({block:"center"});});
     document.querySelectorAll("[data-go-home]").forEach((button) => button.addEventListener("click", goHome));
     document.getElementById("presentationButton").addEventListener("click", enterPresentation);
     document.getElementById("adminButton").addEventListener("click", exitPresentation);
     document.getElementById("drawButton").addEventListener("click", startDraw);
+    document.getElementById("constraintRedrawButton").addEventListener("click",startDraw);
+    document.getElementById("cancelConstraintDraw").addEventListener("click",()=>pendingSolve?.abort());
     document.getElementById("skipDrawButton").addEventListener("click", () => { if (seatTimeline) seatTimeline.reveal(); });
     document.getElementById("rotateCounterclockwiseButton").addEventListener("click", () => rotateLayout("counterclockwise"));
     document.getElementById("rotateClockwiseButton").addEventListener("click", () => rotateLayout("clockwise"));
@@ -1366,7 +1455,7 @@
     document.getElementById("presentationFullscreenButton").addEventListener("click", toggleFullscreen);
     document.getElementById("classSelector").addEventListener("change", (event) => switchClass(event.target.value));
     document.getElementById("addClassButton").addEventListener("click", () => addClass(false));
-    document.getElementById("duplicateClassButton").addEventListener("click", () => addClass(true));
+    document.getElementById("duplicateClassButton").addEventListener("click", () => SeatMaster.classRecordsUI.openCopy());
     document.getElementById("deleteClassButton").addEventListener("click", deleteActiveClass);
     document.getElementById("exportButton").addEventListener("click", () => {
       if (!window.confirm(i18n.t("confirm.fullBackup"))) return;
@@ -1382,7 +1471,7 @@
         const students = incoming.classes.reduce((sum, entry) => sum + engine.buildStudents(engine.normalizeConfig(entry.state.config)).length, 0);
         if (!window.confirm(i18n.t("confirm.importPreview", { count, students, names: incoming.classes.map((entry) => entry.state.config.className || "—").join(", ") }))) return;
         preserveRecovery();
-        importClasses(incoming);
+        if(!await importClasses(incoming))return;
         SeatMaster.onboarding?.markMeaningfulActivity();
         ui.showToast(i18n.t("toast.imported"));
       } catch (error) {
@@ -1407,7 +1496,7 @@
       if (!window.confirm(i18n.t("confirm.reset"))) return;
       preserveRecovery();
       if (!storage.clear().ok) { ui.showToast(i18n.t("common.saveFailed"), "error"); return; }
-      workspace = { version: SeatMaster.constants.VERSION, activeClassId: "class-1", classes: [{ id: "class-1", state: hydrate(SeatMaster.createDefaultState()) }] };
+      const id=makeClassId();workspace = { version: SeatMaster.constants.VERSION, activeClassId: id, classes: [SeatMaster.classData.initializeEntry({ id, state: hydrate(SeatMaster.createDefaultState()) })] };
       state = workspace.classes[0].state;
       roomUndoStack = []; roomRedoStack = []; roomRangeEdits.clear();
       adminMode = "layout";
@@ -1430,7 +1519,9 @@
 
   function init() {
     const initialWorkspaceSnapshot = storage.load();
-    workspace = initialWorkspaceSnapshot ? JSON.parse(JSON.stringify(initialWorkspaceSnapshot)) : { version: SeatMaster.constants.VERSION, activeClassId: "class-1", classes: [{ id: "class-1", state: SeatMaster.createDefaultState() }] };
+    const id=makeClassId();
+    workspace = initialWorkspaceSnapshot ? JSON.parse(JSON.stringify(initialWorkspaceSnapshot)) : { version: SeatMaster.constants.VERSION, activeClassId: id, classes: [{ id, state: SeatMaster.createDefaultState() }] };
+    workspace.classes.forEach(SeatMaster.classData.initializeEntry);
     state = hydrate(activeClassEntry().state);
     activeClassEntry().state = state;
     manual = SeatMaster.manualSeating.createController(() => state, (persist = true) => { render({ keepInputs: true }); if (persist) saveSoon(); }, finishManual);
@@ -1440,7 +1531,10 @@
     bindEvents();
     SeatMaster.workflow.init(() => state);
     SeatMaster.onboarding.init();
-    studentPicker = SeatMaster.studentDraw.init(() => state, updateSoundButton);
+    const callbacks={getState:()=>state,getEntry:()=>{syncActiveClass();return activeClassEntry();},getWorkspace:()=>{syncActiveClass();return workspace;},commit:commitWorkspace,switchClass,copyClass:all=>addClass(all,!all)};
+    SeatMaster.classRecordsUI.init(callbacks);
+    SeatMaster.separationUI.init(callbacks);
+    studentPicker = SeatMaster.studentDraw.init(() => state, updateSoundButton,saveWorkspace);
     groupPlannerUi = SeatMaster.groupUI.create(() => state, saveSoon);
     render();
     saveWorkspace();
