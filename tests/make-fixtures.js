@@ -8,6 +8,8 @@ for (const name of ['constants', 'seat-engine', 'room-layout']) {
 }
 const SM = context.window.SeatMaster;
 const state = SM.createDefaultState();
+// These fixtures intentionally preserve the pre-v5 schema for migration tests.
+state.version = 4;
 state.config = SM.engine.normalizeConfig(state.config);
 state.seats = SM.engine.buildSeatGrid(state.config, []);
 const workspace = { version: 4, activeClassId: 'class-1', classes: [{ id: 'class-1', state }] };
