@@ -10,7 +10,7 @@ vm.createContext(context);
 for (const file of ['constants', 'seat-engine', 'storage', 'group-planner', 'room-layout']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../js', file + '.js'), 'utf8'), context);
 const SM = context.window.SeatMaster;
 const fixture = name => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', name + '.json'), 'utf8'));
-for (const version of [1, 2, 3]) assert.equal(SM.storage.migrate(fixture('legacy-v' + version)).classes[0].state.version, 4);
+for (const version of [1, 2, 3]) assert.equal(SM.storage.migrate(fixture('legacy-v' + version)).classes[0].state.version, 5);
 for (const name of ['existing-v4', 'multi-v4']) {
   const source = fixture(name);
   assert.equal(SM.storage.save(source).ok, true);
