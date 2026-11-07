@@ -384,7 +384,11 @@
     const previous = state.config;
     const cosmeticOnly = ["rows", "cols", "maxNumber", "emptyNumbers", "femaleStart", "studentData", "seatExcludedNumbers"].every((key) => previous[key] === config[key]);
     if (!cosmeticOnly && (state.hasDrawn || state.manualDraft || state.seats.some((seat) => seat.pin))) {
-      if (!window.confirm(i18n.t("confirm.changeLayout"))) { ui.fillInputs(state); return; }
+      const prospective = state.roomLayout ? state.seats : engine.buildSeatGrid(config, state.seats);
+      const nextIds = new Set(prospective.filter(seat => seat.type !== "aisle").map(seat => seat.id));
+      const nextStudents = new Set(engine.studentsRequiringSeats(config).map(student => student.number));
+      const affected = state.seats.filter(seat => [seat.pin, state.assignment[seat.id], state.manualDraft?.[seat.id]].some(number => Number.isInteger(number) && (!nextIds.has(seat.id) || !nextStudents.has(number)))).length;
+      if (!window.confirm(i18n.t("confirm.layoutPreview", { before: state.seats.filter(seat => seat.type !== "aisle").length, after: nextIds.size, students: nextStudents.size, affected }))) { ui.fillInputs(state); return; }
       preserveRecovery();
     }
     state.config = config;
@@ -460,7 +464,13 @@
 
   function applyRoomTemplate(template) {
     if (template === "grid" && !state.roomLayout) return;
-    if ((state.hasDrawn || state.manualDraft || state.seats.some((seat) => seat.pin)) && !window.confirm(i18n.t("confirm.changeLayout"))) return;
+    if (state.hasDrawn || state.manualDraft || state.seats.some((seat) => seat.pin)) {
+      const before = state.seats.filter(seat => seat.type !== "aisle").length;
+      const students = engine.studentsRequiringSeats(state.config).length;
+      const after = template === "grid" ? engine.buildSeatGrid(state.config, state.seats).filter(seat => seat.type !== "aisle").length : Math.max(before, students);
+      const arranged = new Set([...Object.values(state.assignment), ...Object.values(state.manualDraft || {}), ...state.seats.map(seat => seat.pin)].filter(Number.isInteger)).size;
+      if (!window.confirm(i18n.t("confirm.layoutPreview", { before, after, students, affected: Math.max(0, arranged - after) }))) return;
+    }
     closeStudentProfile();
     recordRoomEdit();
     if (template === "grid") {
@@ -482,14 +492,14 @@
       state.seats = gridSeats;
       state.roomLayout = null;
       selectedTableId = null; selectedPathId = null;
-      if (state.hasDrawn && new Set(Object.values(state.assignment).filter(Number.isInteger)).size !== engine.studentsRequiringSeats(state.config).length) { state.hasDrawn = false; state.assignment = {}; }
+      reconcileSeating();
       if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
     } else {
       const created = SeatMaster.roomLayout.createTemplate(state, template);
       state.seats = created.seats;
       state.roomLayout = created.roomLayout;
       state.assignment = Object.fromEntries(state.seats.filter((seat) => seat.type !== "aisle").map((seat) => [seat.id, state.assignment[seat.id] ?? null]));
-      if (state.hasDrawn && new Set(Object.values(state.assignment).filter(Number.isInteger)).size !== engine.studentsRequiringSeats(state.config).length) { state.hasDrawn = false; state.assignment = {}; }
+      reconcileSeating();
       if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
       selectedTableId = state.roomLayout.tables[0]?.id || null;
       state.roomLayout.selectedTableId = selectedTableId;

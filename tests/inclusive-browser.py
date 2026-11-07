@@ -33,10 +33,23 @@ try:
           state.config=SeatMaster.engine.normalizeConfig(state.config);
           state.seats=SeatMaster.engine.buildSeatGrid(state.config,[]);
           state.assignment=SeatMaster.engine.arrange(state);state.hasDrawn=true;
+          state.activities=[3,2,1].map(n=>({id:'activity-'+n,title:'Observation '+n,createdAt:'2026-11-0'+n,participants:[1,2,3,4,5,6,7,8],groupSize:4,strategy:'random',preassignments:{},groups:[{id:'group-1',name:'A',members:[1,2,3,4],locked:false},{id:'group-2',name:'B',members:[5,6,7,8],locked:false}],history:[]}));
           localStorage.setItem(key,JSON.stringify({version:4,activeClassId:'class-1',classes:[{id:'class-1',state}]}));
         }''',KEY)
         page.reload()
         original = state(page)
+        page.locator('.support-card summary').click()
+        page.locator('#observationButton').click()
+        expect(page.locator('#observationDialog')).to_be_visible()
+        expect(page.locator('#observationDialog')).to_contain_text('學習參與')
+        page.emulate_media(media='print')
+        expect(page.locator('#observationPrint')).not_to_be_visible()
+        page.emulate_media(media='screen')
+        page.locator('#observationClose').click()
+        page.locator('#groupPlannerOpen').click()
+        expect(page.locator('#groupStatus')).to_contain_text('配對')
+        expect(page.locator('#groupStatus')).to_contain_text('1 / 2')
+        page.locator('#groupPlannerClose').click()
         page.locator('#presentationButton').click()
         page.locator('.seat.has-profile').first.click()
         expect(page.locator('#studentProfileOverlay')).to_be_visible()
@@ -95,6 +108,15 @@ try:
         page.locator('#importFileInput').set_input_files({'name':'broken.json','mimeType':'application/json','buffer':json.dumps(invalid).encode()})
         page.wait_for_timeout(100)
         assert page.evaluate('(key)=>localStorage.getItem(key)', KEY) == prior
+
+        # Returning to a smaller grid keeps valid placements as a draft.
+        page.locator('[data-room-template="grid"]').click()
+        page.locator('#colsInput').fill('2')
+        page.locator('#colsInput').press('Tab')
+        assert len([n for n in state(page)['manualDraft'].values() if n is not None]) == 4
+        page.locator('[data-room-template="round"]').click()
+        page.locator('[data-room-template="grid"]').click()
+        assert len([n for n in state(page)['manualDraft'].values() if n is not None]) == 4
 
         # Dense U layout explicitly warns rather than hiding collisions.
         page.locator('[data-room-template="u"]').click()

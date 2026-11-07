@@ -134,9 +134,16 @@ try:
             for _ in range(5):
                 box = page.locator('#tourNext').bounding_box()
                 assert box and box['x'] >= 0 and box['y'] >= 0 and box['x'] + box['width'] <= width + 1 and box['y'] + box['height'] <= height + 1
+                target_box = page.locator('.tour-target').bounding_box()
+                panel_box = page.locator('#tourPanel').bounding_box()
+                if target_box and panel_box:
+                    overlap = target_box['x'] < panel_box['x'] + panel_box['width'] and target_box['x'] + target_box['width'] > panel_box['x'] and target_box['y'] < panel_box['y'] + panel_box['height'] and target_box['y'] + target_box['height'] > panel_box['y']
+                    assert not overlap, (label, target_box, panel_box)
                 page.locator('#tourNext').click()
             page.locator('#readyCreate').click()
             page.evaluate('window.scrollTo(0,0); document.querySelector(".classroom-stage").scrollTop=0;document.querySelector(".control-panel").scrollTop=0')
+            expect(page.locator('.header-actions.presentation-only')).not_to_be_visible()
+            expect(page.locator('.brand')).to_be_visible()
             page.screenshot(path=str(ARTIFACTS / ('workspace-' + label + '.png')))
         page.set_viewport_size({'width': 1280, 'height': 900})
 

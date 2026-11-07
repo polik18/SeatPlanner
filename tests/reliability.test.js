@@ -42,6 +42,9 @@ for (let size = 2; size <= 6; size++) for (let male = 0; male <= 34; male++) for
 const students = Array.from({ length: 8 }, (_, i) => ({ number: i + 1, gender: i < 6 ? 'male' : 'female' }));
 assert.deepEqual(Array.from(SM.groupPlanner.draw(students, 4, 'same', { 7: 0 }), g => g.members.length).sort((a,b) => a-b), [2, 6]);
 assert.throws(() => SM.groupPlanner.draw(students, 4, 'same', { 1: 0, 7: 0 }));
+SM.i18n = { getLanguage: () => 'en' };
+assert.throws(() => SM.groupPlanner.draw(students, 4, 'same', { 1: 0, 7: 0 }), /different genders/);
+assert.equal(SM.groupPlanner.draw(students, 4, 'same', {})[0].name, 'Group 1');
 
 const table = { x: 50, y: 50, width: 40, height: 10, rotation: 90, type: 'round', geometry: {}, seatIds: ['a', 'b'], seatPositions: [] };
 assert.equal(SM.roomLayout.tableIntersectsPath(table, { x: 47, y: 65, width: 6, height: 6 }), true);

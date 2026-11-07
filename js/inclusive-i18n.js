@@ -2,6 +2,7 @@
   window.SeatMaster.i18n.addMessages({
     'zh-Hant': {
       'app.title': 'SeatPlanner Inclusive｜共融教室座位與合作學習',
+      'stage.pageTitle': '{className} · 座位編排',
       'common.saveFailed': '儲存失敗，請立即匯出備份',
       'profile.publicOnly': '公開資料卡僅顯示座號與姓名。',
       'admin.dataPlaceholder': '座號\t姓名\n1\t王小明\n2\t李小華',
@@ -18,6 +19,7 @@
       'confirm.removeSeats': '此變更影響 {count} 個已安排位置。其他位置會保留，衝突學生移回待排；可使用桌位復原。要繼續嗎？',
       'confirm.deleteTable': '將刪除桌組及 {count} 個座位。其他排位保留，可使用「復原桌位編輯」還原。要繼續嗎？',
       'confirm.changeLayout': '這會調整已有排位的教室或名單。保留可對應的位置，衝突學生回到待排；可使用復原。要繼續嗎？',
+      'confirm.layoutPreview': '可用座位：{before} → {after}；需要座位：{students} 位。\n預計 {affected} 個已有安排的位置受影響。其他合法位置保留，衝突學生回到待排，可使用復原。要繼續嗎？',
       'confirm.reset': '將重設全部班級與新手教學。請先匯出備份；本次頁面關閉前也可復原資料操作。要繼續嗎？',
       'workflow.title': '今天的教室，從這裡開始',
       'workflow.hint': '先保留需要的位置，剩下的交給抽籤或手動安排。',
@@ -52,6 +54,7 @@
     },
     en: {
       'app.title': 'SeatPlanner Inclusive | Classroom seating and collaboration',
+      'stage.pageTitle': '{className} · Seating',
       'common.saveFailed': 'Save failed. Export a backup now.', 'profile.publicOnly': 'Public cards show only student number and name.',
       'admin.dataPlaceholder': 'Number\tName\n1\tAlex\n2\tTaylor', 'admin.dataHelp': 'Paste a spreadsheet with Number and Name headers.',
       'admin.dataPrivacy': 'Presentations show only numbers and names. Full backups retain existing fields. Avoid passwords, diagnoses and contact details.',
@@ -64,6 +67,7 @@
       'confirm.removeSeats': 'This affects {count} arranged positions. Other positions are kept; affected students return to pending. Use room undo to recover. Continue?',
       'confirm.deleteTable': 'Remove this table and {count} seats? Other positions are kept. Use room undo to recover.',
       'confirm.changeLayout': 'Change a classroom or roster with existing arrangements? Matching positions are kept; affected students return to pending. Undo is available.',
+      'confirm.layoutPreview': 'Usable seats: {before} → {after}; students needing seats: {students}.\nApproximately {affected} arranged positions are affected. Other valid positions are kept; affected students return to pending. Undo is available. Continue?',
       'confirm.reset': 'Reset all classes and the tutorial? Export a backup first. Undo data operation is available until this page closes.',
       'workflow.title': 'Make room for everyone', 'workflow.hint': 'Reserve the positions that matter, then draw or arrange the remaining seats.',
       'workflow.modes': 'Seating actions', 'workflow.class': 'Create class', 'workflow.room': 'Plan classroom', 'workflow.priority': 'Priority seating',
