@@ -6,7 +6,8 @@
   let context = null;
   let master = null;
   const voices = new Set();
-  let enabled = localStorage.getItem(SOUND_KEY) !== "false";
+  let enabled = false;
+  try { enabled = localStorage.getItem(SOUND_KEY) === "true"; } catch (_) { /* stay silent */ }
 
   function ensureContext() {
     if (!enabled) return null;
@@ -109,7 +110,7 @@
 
   function setEnabled(value) {
     enabled = Boolean(value);
-    localStorage.setItem(SOUND_KEY, String(enabled));
+    try { localStorage.setItem(SOUND_KEY, String(enabled)); } catch (_) { /* memory-only preference */ }
     if (master) master.gain.setValueAtTime(enabled ? 0.18 : 0, context.currentTime);
     if (!enabled) stop();
     if (enabled) {

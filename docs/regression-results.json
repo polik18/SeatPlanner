@@ -1,0 +1,113 @@
+{
+  "date": "2026-11-07T01:15:04.293743+00:00",
+  "browserRequested": true,
+  "results": [
+    {
+      "command": [
+        "node",
+        "tests\\effects.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "effects tests passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\engine.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "engine tests passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\group-planner.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "group planner tests passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\manual.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "manual seating tests passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\onboarding.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "onboarding decision matrix passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\reliability.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "reliability tests passed (gender feasibility exhaustive through 34 students)\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "node",
+        "tests\\room-layout.test.js"
+      ],
+      "exitCode": 0,
+      "stdout": "room layout tests passed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "E:\\Git\\SeatPlanner-main\\.venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "E:\\Git\\SeatPlanner-main\\tests\\manual-browser.py"
+      ],
+      "exitCode": 0,
+      "stdout": "{\"status\": \"passed\", \"screenshots\": \"C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\seatplanner-manual-txqhh12t\", \"page_errors\": []}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "E:\\Git\\SeatPlanner-main\\.venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "E:\\Git\\SeatPlanner-main\\tests\\features-browser.py"
+      ],
+      "exitCode": 0,
+      "stdout": "{\"status\": \"passed\", \"page_errors\": []}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "E:\\Git\\SeatPlanner-main\\.venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "E:\\Git\\SeatPlanner-main\\tests\\onboarding-browser.py"
+      ],
+      "exitCode": 0,
+      "stdout": "onboarding browser matrix passed; screenshots: E:\\Git\\SeatPlanner-main\\test-results\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "E:\\Git\\SeatPlanner-main\\.venv\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "E:\\Git\\SeatPlanner-main\\tests\\inclusive-browser.py"
+      ],
+      "exitCode": 0,
+      "stdout": "inclusive privacy, backups, room preservation and geometry browser tests passed\n",
+      "stderr": ""
+    }
+  ]
+}

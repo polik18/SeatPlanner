@@ -119,6 +119,13 @@
       });
       const issues = [...report.errors, ...genderIssues, ...seatIssues];
       $("groupStatus").textContent = issues.length ? `${t("groups.needsAdjustment")} ${issues.join(" ")}` : `${t("groups.ready", { count, groups: activity.groups.length })}${onePerson}`;
+      const repeated = [];
+      const history = getState().activities.filter(previous => previous.id !== activity.id && previous.createdAt <= activity.createdAt).slice(0, 5);
+      for (const group of activity.groups) for (let i = 0; i < group.members.length; i++) for (let j = i + 1; j < group.members.length; j++) {
+        const a = group.members[i], b = group.members[j];
+        if (history.filter(previous => previous.groups?.some(old => old.members.includes(a) && old.members.includes(b))).length >= 2) repeated.push(`${a} / ${b}`);
+      }
+      if (repeated.length) $("groupStatus").textContent += ' ' + t('support.repeat', { count: repeated.length, pairs: repeated.slice(0, 5).join(', ') });
       $("groupStatus").classList.toggle("is-error", issues.length > 0);
       $("groupUndoButton").disabled = !activity.history.length;
       $("groupRedoButton").disabled = !redo.length;
@@ -197,6 +204,8 @@
       let groups;
       try { groups = groupPlanner.draw(students, groupSize, strategy, preassignments); }
       catch (error) { $("groupStatus").textContent = error.message; $("groupStatus").classList.add("is-error"); return; }
+      const report = groupPlanner.validate(groups, students.map(student => student.number));
+      if (students.length > 1 && !report.valid) { $("groupStatus").textContent = report.errors.join(" "); return; }
       const groupTables = {};
       const areas = seatingAreas();
       groups.forEach((group, index) => {

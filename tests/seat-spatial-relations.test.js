@@ -1,0 +1,40 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const disk=new Map(),ctx={window:{crypto:require('node:crypto').webcrypto,setTimeout},setTimeout,AbortController,localStorage:{getItem:k=>disk.get(k)??null,setItem:(k,v)=>disk.set(k,v),removeItem:k=>disk.delete(k)}};
+vm.createContext(ctx);
+for(const f of ['constants','seat-engine','class-data','classroom-geometry','room-layout','drawing-scene','storage','seating-constraints','constrained-arranger','layout-planner'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../js',f+'.js'),'utf8'),ctx);
+const M=ctx.window.SeatMaster,S=M.drawingScene,C=M.seatingConstraints;
+function state(){const s=M.createDefaultState();s.config=M.engine.normalizeConfig({...s.config,rows:3,cols:3,maxNumber:9,femaleStart:5,emptyNumbers:''});s.seats=M.engine.buildSeatGrid(s.config,[]);M.classData.ensure(s);S.upgrade(s);return s;}
+function pattern(s,name){return M.engine.applyGenderPattern(s.config,s.seats,name,S.genderOrder(s)).seats;}
+(async()=>{
+  const s=state(),ids=s.seats.map(x=>x.id),original=pattern(s,'rows');
+  const a=S.box(s,{kind:'seat',id:ids[0]}),b=S.box(s,{kind:'seat',id:ids[3]});
+  S.setBox(s,{kind:'seat',id:a.id},b);S.setBox(s,{kind:'seat',id:b.id},a);
+  const cells=S.logicalCells(s);assert.equal(cells[a.id].row,1);assert.equal(cells[b.id].row,0);
+  const moved=pattern(s,'rows');assert.equal(moved.find(x=>x.id===a.id).type,original.find(x=>x.id===b.id).type);
+  assert.equal(s.seats[0].row,0,'historical row and ID stay intact');
+  S.setBox(s,{kind:'seat',id:a.id},{...S.box(s,{kind:'seat',id:a.id}),y:b.y+3});assert.equal(S.logicalCells(s)[a.id].row,1,'small misalignment stays in the row');
+  const added=S.addSeat(s);assert.ok(Number.isInteger(S.genderOrder(s)[added.id].index),'standalone seats have a table-sequence fallback');
+  const gap=state();S.remove(gap,ids.slice(3,6).map(id=>({kind:'seat',id})));assert.equal(S.logicalCells(gap)[ids[8]].row,2,'an empty middle row remains an empty chessboard row');
+  const t=state(),automatic=S.edges(t),removed=automatic[0],addedEdge=[ids[0],ids[8]];
+  t.seatTopology=C.confirmTopology(t,[...automatic.filter(e=>C.edgeKey(...e)!==C.edgeKey(...removed)),addedEdge]);
+  let ready=await M.layoutPlanner.prepare(t);assert.equal(ready.status,'solved');
+  assert.ok(!C.topology(ready.state).edges.has(C.edgeKey(...removed)));assert.ok(C.topology(ready.state).edges.has(C.edgeKey(...addedEdge)));
+  const far=S.box(t,{kind:'seat',id:ids[8]});S.setBox(t,{kind:'seat',id:ids[8]},{...far,x:far.x-70});
+  assert.ok(C.topology(t).edges.has(C.edgeKey(...addedEdge)),'manual additions survive geometry changes');
+  assert.ok(!C.topology(t).edges.has(C.edgeKey(...removed)),'manual removals survive geometry changes');
+  const dynamic=state();dynamic.seatTopology=C.refreshTopology(dynamic);const old=dynamic.seatTopology.edges.length;
+  const farSeat=S.box(dynamic,{kind:'seat',id:ids[0]});S.setBox(dynamic,{kind:'seat',id:ids[0]},{...farSeat,x:3000,y:3000});
+  assert.ok(C.topology(dynamic).edges.size<old,'automatic adjacency follows moved chairs without stale edges');
+  const ruled=state(),identity=n=>ruled.rosterIdentity.find(r=>r.number===n).studentId;
+  ruled.seatingConstraints.pairs=[{id:'separate',studentAId:identity(1),studentBId:identity(2),relations:['notAdjacent'],enabled:true}];
+  ruled.seats[0].pin=1;ruled.seats[8].pin=2;
+  assert.equal((await M.layoutPlanner.prepare(ruled)).status,'solved');
+  const near=S.box(ruled,{kind:'seat',id:ids[0]}),last=S.box(ruled,{kind:'seat',id:ids[8]});
+  S.setBox(ruled,{kind:'seat',id:ids[8]},{...last,x:near.x+80,y:near.y});
+  assert.equal((await M.layoutPlanner.prepare(ruled)).status,'unsatisfiable','moving pinned partners together must fail the new adjacency check');
+  const explicit=state();explicit.genderPlan={version:1,source:'teacher-pattern',strategy:'checkerboard',preferences:{}};
+  ready=await M.layoutPlanner.prepare(explicit);assert.equal(ready.status,'solved');assert.equal(ready.state.genderPlan.strategy,'checkerboard');assert.equal(ready.state.genderPlan.source,'teacher-pattern');
+  const workspace={version:5,activeClassId:'c',classes:[{id:'c',state:t}]};assert.ok(M.storage.save(workspace).ok);const loaded=M.storage.load();assert.ok(loaded.classes[0].state.seatTopology.overrides.add.length);
+  S.remove(t,[{kind:'seat',id:ids[8]}]);assert.equal(C.refreshTopology(t).overrides.add.length,0,'deleted endpoints are removed');
+  console.log('Spatial relations: current rows, jitter, standalone order, live adjacency, persistent overrides, deletion and teacher pattern passed');
+})().catch(e=>{console.error(e);process.exitCode=1;});

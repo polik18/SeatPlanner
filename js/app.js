@@ -20,12 +20,94 @@
   let roomUndoStack = [];
   let roomRedoStack = [];
   const roomRangeEdits = new Set();
+  let recoveryWorkspace = null;
+  let pendingSolve = null;
+  let updatingRoster = false;
+  let layoutEditSession = null;
+  function beginLayoutDraft() {
+    if(layoutEditSession)return;
+    const resume=state.layoutDraft,base=SeatMaster.classData.clone(state);delete base.layoutDraft;
+    layoutEditSession={base};delete state.layoutDraft;
+    if(resume){const restored=hydrate(resume);if(resume.hasDrawn&&!restored.hasDrawn){const ids=new Set(restored.seats.map(s=>s.id)),numbers=new Set(engine.studentsRequiringSeats(restored.config).map(s=>s.number)),seen=new Set();const kept=Object.fromEntries(Object.entries(resume.assignment||{}).filter(([id,n])=>ids.has(id)&&numbers.has(n)&&!seen.has(n)&&seen.add(n)));restored.manualDraft={...restored.manualDraft,...kept};}for(const key of Object.keys(state))delete state[key];Object.assign(state,restored);}
+    SeatMaster.drawingScene.upgrade(state);roomUndoStack=[];roomRedoStack=[];
+  }
+  function suspendLayoutDraft() {
+    if(!layoutEditSession)return;
+    saveWorkspace();
+    const draft=SeatMaster.classData.clone(state),base=layoutEditSession.base;delete draft.layoutDraft;
+    layoutEditSession=null;for(const key of Object.keys(state))delete state[key];Object.assign(state,hydrate(base),{layoutDraft:draft});
+  }
+  async function finishLayoutDraft(signal,onProgress) {
+    if(!layoutEditSession)return{status:'invalid',errors:['沒有正在編輯的教室。']};
+    const stamp=JSON.stringify(state),result=await SeatMaster.layoutPlanner.prepare(state,{signal,onProgress});
+    if(result.status!=='solved')return result;
+    if(signal.aborted||stamp!==JSON.stringify(state))return{status:'cancelled'};
+    syncActiveClass();const candidate=SeatMaster.classData.clone(workspace);
+    candidate.classes.find(entry=>entry.id===candidate.activeClassId).state=result.state;
+    const saved=storage.save(candidate);reportStorageResult(saved);
+    if(!saved.ok)return{status:'invalid',errors:['無法保存配置，請先匯出備份或釋放儲存空間。']};
+    layoutEditSession=null;for(const key of Object.keys(state))delete state[key];Object.assign(state,result.state);syncActiveClass();manual.reset();
+    return{status:'solved'};
+  }
+  function reportStorageResult(result){
+    const node=document.getElementById("classStorageError");
+    node.hidden=result.ok;
+    node.textContent=result.ok?"":SeatMaster.seatingConstraints.say(`此次未能保存 ${workspace.classes.length} 個班級${result.bytes?`（約 ${Math.ceil(result.bytes/1024)} KiB）`:""}。原已存資料保留；請先下載備份，再於「我的班級」選擇清理紀錄。`,`Could not save ${workspace.classes.length} classes${result.bytes?` (about ${Math.ceil(result.bytes/1024)} KiB)`:""}. Previously saved data is kept. Download a backup, then choose records to remove in My classes.`);
+    document.getElementById("saveStatus").classList.toggle("is-error",!result.ok);
+  }
+
+  function commitWorkspace(mutator) {
+    SeatMaster.classroomEditor?.stop();
+    syncActiveClass();
+    const candidate = SeatMaster.classData.clone(workspace);
+    try { mutator(candidate); candidate.classes.forEach(SeatMaster.classData.initializeEntry); }
+    catch (error) { ui.showToast(error.message, "error"); return false; }
+    const result = storage.save(candidate);
+    reportStorageResult(result);
+    if (!result.ok) { ui.setSaveStatus(i18n.t("common.saveFailed")); ui.showToast(i18n.t("common.saveFailed"), "error"); return false; }
+    preserveRecovery();
+    const oldLayout = JSON.stringify(state.roomLayout), oldDraft = JSON.stringify(state.manualDraft);
+    workspace = candidate; state = hydrate(activeClassEntry().state); activeClassEntry().state = state;
+    if (JSON.stringify(state.roomLayout) !== oldLayout) { roomUndoStack=[]; roomRedoStack=[]; selectedTableId=state.roomLayout?.selectedTableId || null; selectedPathId=state.roomLayout?.selectedPathId || null; }
+    if (JSON.stringify(state.manualDraft) !== oldDraft) manual.reset();
+    adminMode=state.adminMode;
+    render(); ui.setSaveStatus(i18n.t("common.saved")); SeatMaster.onboarding?.markMeaningfulActivity();
+    return true;
+  }
+
+  function preserveRecovery() {
+    syncActiveClass();
+    recoveryWorkspace = JSON.parse(JSON.stringify(workspace));
+    const button = document.getElementById("recoverButton");
+    if (button) button.disabled = false;
+  }
+
+  function reconcileSeating() {
+    const valid = new Set(engine.studentsRequiringSeats(state.config).map((student) => student.number));
+    const seen = new Set();
+    const source = { ...state.assignment, ...(state.manualDraft || {}) };
+    const kept = {};
+    state.seats.filter((seat) => seat.type !== "aisle").forEach((seat) => {
+      const number = source[seat.id];
+      kept[seat.id] = valid.has(number) && !seen.has(number) ? number : null;
+      if (kept[seat.id] !== null) seen.add(number);
+    });
+    if (state.hasDrawn && seen.size === valid.size) state.assignment = kept;
+    else {
+      state.hasDrawn = false;
+      state.assignment = {};
+      state.manualDraft = seen.size ? kept : state.manualDraft ? SeatMaster.manualSeating.normalize(state, state.manualDraft) : null;
+    }
+  }
+
+  function confirmSeatRemoval(ids) {
+    const removed = new Set(ids);
+    const count = state.seats.filter((seat) => removed.has(seat.id) && (seat.pin || Number.isInteger(state.assignment[seat.id]) || Number.isInteger(state.manualDraft?.[seat.id]))).length;
+    return !count || window.confirm(i18n.t("confirm.removeSeats", { count }));
+  }
 
   function makeClassId() {
-    const used = new Set((workspace?.classes || []).map((entry) => entry.id));
-    let suffix = 1;
-    while (used.has(`class-${suffix}`)) suffix += 1;
-    return `class-${suffix}`;
+    return SeatMaster.classData.id();
   }
 
   function activeClassEntry() {
@@ -39,7 +121,16 @@
 
   function saveWorkspace() {
     syncActiveClass();
-    storage.save(workspace);
+    workspace.classes.forEach(SeatMaster.classData.initializeEntry);
+    const saving = layoutEditSession || SeatMaster.classroomEditor?.dragging ? SeatMaster.classData.clone(workspace) : workspace;
+    if(layoutEditSession){const entry=saving.classes.find(entry=>entry.id===saving.activeClassId);entry.state={...SeatMaster.classData.clone(layoutEditSession.base),layoutDraft:SeatMaster.classroomEditor?.savingState||SeatMaster.classData.clone(state)};delete entry.state.layoutDraft.layoutDraft;}
+    else if (saving !== workspace) saving.classes.find(entry => entry.id === saving.activeClassId).state.classroomGeometry = SeatMaster.classroomEditor.savingGeometry;
+    const result = storage.save(saving);
+    reportStorageResult(result);
+    ui.setSaveStatus(i18n.t(result.ok ? "common.saved" : "common.saveFailed"));
+    document.getElementById("saveStatus").classList.toggle("is-error", !result.ok);
+    SeatMaster.classRecordsUI?.render();
+    return result;
   }
 
   function renderClassManager() {
@@ -67,12 +158,14 @@
       resultSource: value.resultSource,
       manualDraft: value.manualDraft,
       activities: value.activities,
-      roomLayout: value.roomLayout
+      roomLayout: value.roomLayout,
+      classroomGeometry: value.classroomGeometry || null
     };
   }
 
   function hasUntouchedDemoClass() {
     if (!workspace || workspace.classes.length !== 1) return false;
+    if (state.seatingConstraints?.pairs.length || state.studentDrawRound?.history.length || activeClassEntry().records?.some(record=>record.savedAt) || activeClassEntry().meta?.academicYear || activeClassEntry().meta?.term) return false;
     const demo = hydrate(SeatMaster.createDefaultState());
     return JSON.stringify(classStateSnapshot(state)) === JSON.stringify(classStateSnapshot(demo));
   }
@@ -81,7 +174,8 @@
     return Boolean(draft) && typeof draft === "object" && Object.values(draft).some((value) => value !== null && value !== undefined);
   }
 
-  function replaceWorkspace(incoming) {
+  function replaceWorkspace(incoming, persist = true) {
+    SeatMaster.classroomEditor?.stop();
     workspace = incoming;
     state = hydrate(activeClassEntry().state);
     activeClassEntry().state = state;
@@ -92,11 +186,13 @@
     adminMode = hasDraftProgress(state.manualDraft) ? "manual" : state.adminMode;
     manual.reset();
     render();
-    saveWorkspace();
+    if (persist) saveWorkspace();
   }
 
   function switchClass(id) {
     if (!workspace || id === workspace.activeClassId || !workspace.classes.some((entry) => entry.id === id)) return;
+    SeatMaster.classroomEditor?.stop();
+    pendingSolve?.abort();
     closeStudentProfile();
     if (seatTimeline) seatTimeline.cancel();
     document.body.classList.remove("drawing-mode", "presentation-mode");
@@ -114,11 +210,19 @@
     saveWorkspace();
   }
 
-  function addClass(copyCurrent = false) {
+  function addClass(copyCurrent = false, layoutOnly = false) {
+    SeatMaster.classroomEditor?.stop();
+    SeatMaster.onboarding?.markMeaningfulActivity();
     const source = copyCurrent ? JSON.parse(JSON.stringify(state)) : SeatMaster.createDefaultState();
+    if (layoutOnly) {
+      source.config={...state.config,studentData:"",maxNumber:1,emptyNumbers:"1",seatExcludedNumbers:"",femaleStart:2};
+      source.seats=state.seats.map(seat=>({...seat,pin:null})); source.roomLayout=SeatMaster.classData.clone(state.roomLayout);
+      if (state.classroomGeometry) source.classroomGeometry=SeatMaster.classData.clone(state.classroomGeometry);
+    }
+    source.studentDrawRound=null;
     const number = workspace.classes.length + 1;
     source.config = { ...source.config, className: copyCurrent ? `${source.config.className || i18n.t("common.untitled")} ${i18n.t("classes.copySuffix")}` : i18n.t("classes.newName", { number }) };
-    const entry = { id: makeClassId(), state: hydrate(source) };
+    const entry = SeatMaster.classData.initializeEntry({ id: makeClassId(), state: hydrate(source) });
     workspace.classes.push(entry);
     syncActiveClass();
     workspace.activeClassId = entry.id;
@@ -137,6 +241,7 @@
     if (!workspace || workspace.classes.length <= 1) return;
     const entry = activeClassEntry();
     if (!window.confirm(i18n.t("confirm.deleteClass", { className: entry.state.config.className || i18n.t("common.untitled") }))) return;
+    preserveRecovery();
     const index = workspace.classes.findIndex((item) => item.id === entry.id);
     workspace.classes.splice(index, 1);
     workspace.activeClassId = workspace.classes[Math.max(0, index - 1)].id;
@@ -152,42 +257,51 @@
     saveWorkspace();
   }
 
-  function importClasses(incoming) {
+  async function importClasses(incoming) {
     if (!incoming?.classes?.length) return;
-    if (hasUntouchedDemoClass()) { replaceWorkspace(incoming); return; }
-    syncActiveClass();
-    const used = new Set(workspace.classes.map((entry) => entry.id));
-    let suffix = 1;
-    const imported = incoming.classes.map((entry) => {
-      while (used.has(`class-${suffix}`)) suffix += 1;
-      const id = `class-${suffix}`;
-      used.add(id);
-      suffix += 1;
-      return { id, state: hydrate(entry.state) };
+    if (hasUntouchedDemoClass()) return commitWorkspace(candidate=>Object.assign(candidate,incoming));
+    const choices=await SeatMaster.classRecordsUI.chooseImport(incoming);
+    if (!choices) return false;
+    return commitWorkspace(candidate=>{
+      let firstImportedId=null;
+      for(const source of incoming.classes){
+        const existing=candidate.classes.find(entry=>entry.id===source.id), copy=SeatMaster.classData.clone(source);
+        if(hasDraftProgress(copy.state.manualDraft))copy.state.adminMode="manual";
+        if(existing&&choices[source.id]==="update"){
+          SeatMaster.classData.addRecord(existing,SeatMaster.seatingConstraints.say("匯入更新前的草稿","Draft before import update"));
+          const used=new Map(existing.records.map(record=>[record.id,record]));
+          for(const record of copy.records){if(used.has(record.id)&&SeatMaster.classData.content(used.get(record.id).state)!==SeatMaster.classData.content(record.state))record.id=SeatMaster.classData.id();used.set(record.id,record);}
+          copy.records=[...used.values()];Object.assign(existing,copy);firstImportedId ||= existing.id;
+        }else{if(existing)copy.id=makeClassId();candidate.classes.push(copy);firstImportedId ||= copy.id;}
+      }
+      candidate.activeClassId=firstImportedId;
     });
-    workspace.classes.push(...imported);
-    switchClass(imported[0].id);
   }
 
   function roomEditSnapshot() {
-    return JSON.parse(JSON.stringify({ roomLayout: state.roomLayout, seats: state.seats, assignment: state.assignment, hasDrawn: state.hasDrawn, manualDraft: state.manualDraft || null }));
+    return JSON.parse(JSON.stringify({ config: state.config, seatTopology: state.seatTopology, roomLayout: state.roomLayout, classroomGeometry: state.classroomGeometry || null, seats: state.seats, assignment: state.assignment, hasDrawn: state.hasDrawn, manualDraft: state.manualDraft || null, pendingSeatPins:state.pendingSeatPins||[],genderPlan:state.genderPlan||null,layoutCheck:state.layoutCheck||null }));
   }
 
   function recordRoomEdit() {
+    preserveRecovery();
     roomUndoStack.push(roomEditSnapshot());
     if (roomUndoStack.length > 80) roomUndoStack.shift();
     roomRedoStack = [];
   }
 
   function restoreRoomEdit(snapshot) {
+    state.config = snapshot.config;
+    state.seatTopology = snapshot.seatTopology;
     state.roomLayout = snapshot.roomLayout;
+    state.classroomGeometry = snapshot.classroomGeometry;
     state.seats = snapshot.seats;
     state.assignment = snapshot.assignment;
     state.hasDrawn = snapshot.hasDrawn;
     state.manualDraft = snapshot.manualDraft;
+    state.pendingSeatPins=snapshot.pendingSeatPins;state.genderPlan=snapshot.genderPlan;state.layoutCheck=snapshot.layoutCheck;
     selectedTableId = state.roomLayout?.selectedTableId || null;
     selectedPathId = state.roomLayout?.selectedPathId || null;
-    render({ keepInputs: true });
+    render();
     saveSoon();
   }
 
@@ -231,23 +345,29 @@
     const hydrated = { version: SeatMaster.constants.VERSION, config, seats, assignment: resultValid ? assignment : {}, hasDrawn: resultValid,
       resultSource: rawState && rawState.resultSource === "manual" ? "manual" : "draw", manualDraft: null,
       activities: Array.isArray(rawState && rawState.activities) ? rawState.activities : [], roomLayout };
+    for(const key of ["rosterIdentity","seatingConstraints","seatTopology","studentDrawRound","classroomGeometry","layoutDraft","pendingSeatPins","genderPlan","layoutCheck"]) if(rawState?.[key]!==undefined) hydrated[key]=SeatMaster.classData.clone(rawState[key]);
+    SeatMaster.classData.ensure(hydrated);
     if (rawState && rawState.manualDraft && typeof rawState.manualDraft === "object") hydrated.manualDraft = SeatMaster.manualSeating.normalize(hydrated, rawState.manualDraft);
     hydrated.adminMode = ["layout", "prearrange", "manual", "adjust"].includes(rawState && rawState.adminMode) ? rawState.adminMode : hydrated.manualDraft ? "manual" : "layout";
     if (hydrated.adminMode === "adjust" && !resultValid) hydrated.adminMode = "layout";
     return hydrated;
   }
 
-  function saveSoon() {
+  function saveSoon(markActivity = true) {
+    if (markActivity) SeatMaster.onboarding?.markMeaningfulActivity();
     ui.setSaveStatus(i18n.t("common.saving"));
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => {
       saveTimer = null;
       saveWorkspace();
-      ui.setSaveStatus(i18n.t("common.saved"));
     }, 180);
   }
 
   function render(options) {
+    if(document.body.classList.contains("presentation-mode")&&state.hasDrawn&&!options?.concealResult){
+      const report=SeatMaster.seatingConstraints.validateAssignment(state,state.assignment);
+      if(!report.valid){seatTimeline?.cancel();document.body.classList.remove("presentation-mode","drawing-mode");ui.showToast(report.errors.join(" "),"error");}
+    }
     const focusedSeat = document.activeElement.closest(".seat")?.dataset.seatId;
     const presentation = document.body.classList.contains("presentation-mode");
     if (!options || !options.keepInputs) ui.fillInputs(state);
@@ -256,13 +376,18 @@
     if (manualActive && !state.manualDraft) manual.start();
     ui.renderSummary(manualActive ? { ...state, seats: state.seats.map((s) => ({ ...s, pin: null, type: s.type === "aisle" ? "aisle" : "general" })) } : state);
     ui.renderRoomMarkers(state);
-    ui.renderSeatGrid(state, presentation, adminMode, selectedAdjustmentSeatId);
+    ui.renderSeatGrid(options?.concealResult?{...state,hasDrawn:false}:state, presentation, adminMode, selectedAdjustmentSeatId);
     document.getElementById("roomUndoButton").disabled = !roomUndoStack.length;
     document.getElementById("roomRedoButton").disabled = !roomRedoStack.length;
     updateAdminModeUI();
     if (manual) manual.render(manualActive);
     if (manualActive && focusedSeat) document.querySelector(`.seat[data-seat-id="${focusedSeat}"]`)?.focus({ preventScroll: true });
     ui.positionValidationNotice();
+    SeatMaster.workflow?.render(state);
+    SeatMaster.classRecordsUI?.render();
+    SeatMaster.separationUI?.render();
+    SeatMaster.classroomEditor?.render(state);
+    document.documentElement.style.setProperty("--header-height",document.querySelector(".app-header").offsetHeight+"px");
   }
 
   function updateAdminModeUI() {
@@ -274,7 +399,7 @@
     document.querySelectorAll("[data-admin-mode]").forEach((button) => {
       const active = button.dataset.adminMode === adminMode;
       button.classList.toggle("is-active", active);
-      button.setAttribute("aria-selected", String(active));
+      button.setAttribute("aria-pressed", String(active));
     });
     document.getElementById("adjustModeButton").disabled = !state.hasDrawn;
     const help = document.getElementById("adminModeHelp");
@@ -293,6 +418,7 @@
   function readConfigFromInputs() {
     return engine.normalizeConfig({
       className: document.getElementById("classNameInput").value,
+      roomAspect: document.getElementById("roomAspectInput").value,
       rows: document.getElementById("rowsInput").value,
       cols: document.getElementById("colsInput").value,
       maxNumber: document.getElementById("maxNumberInput").value,
@@ -340,18 +466,37 @@
     }
   }
 
-  function updateFromInputs() {
+  async function updateFromInputs() {
+    if (updatingRoster) return;
     const config = readConfigFromInputs();
     const previous = state.config;
+    let identityChoices = null;
+    const rosterChanged=SeatMaster.classData.rosterChanged(state,config);
+    const proposedIdentities=rosterChanged?SeatMaster.classData.identityChoices(state,config):[];
+    const oldActive=state.rosterIdentity.filter(row=>row.number!==null), newNumbers=new Set(proposedIdentities.map(row=>row.number));
+    const ambiguousIdentity=proposedIdentities.some(row=>!row.studentId&&(oldActive.some(old=>old.number===row.number)||oldActive.some(old=>!newNumbers.has(old.number))));
+    if(rosterChanged&&ambiguousIdentity&&(state.seatingConstraints.pairs.length||state.hasDrawn||Object.values(state.manualDraft||{}).some(Number.isInteger))){
+      updatingRoster=true;
+      identityChoices=await SeatMaster.classRecordsUI.reviewRoster(config);
+      updatingRoster=false;
+      if(!identityChoices){ui.fillInputs(state);return;}
+    }
     const cosmeticOnly = ["rows", "cols", "maxNumber", "emptyNumbers", "femaleStart", "studentData", "seatExcludedNumbers"].every((key) => previous[key] === config[key]);
-    state.config = config;
+    if (!cosmeticOnly && (state.hasDrawn || state.manualDraft || state.seats.some((seat) => seat.pin))) {
+      const prospective = state.roomLayout ? state.seats : engine.buildSeatGrid(config, state.seats);
+      const nextIds = new Set(prospective.filter(seat => seat.type !== "aisle").map(seat => seat.id));
+      const nextStudents = new Set(engine.studentsRequiringSeats(config).map(student => student.number));
+      const affected = state.seats.filter(seat => [seat.pin, state.assignment[seat.id], state.manualDraft?.[seat.id]].some(number => Number.isInteger(number) && (!nextIds.has(seat.id) || !nextStudents.has(number)))).length;
+      if (!window.confirm(i18n.t("confirm.layoutPreview", { before: state.seats.filter(seat => seat.type !== "aisle").length, after: nextIds.size, students: nextStudents.size, affected }))) { ui.fillInputs(state); return; }
+      preserveRecovery();
+    }
+    if(rosterChanged) SeatMaster.classData.applyIdentity(state,config,identityChoices || SeatMaster.classData.identityChoices(state,config));
+    else state.config = config;
     if (cosmeticOnly) { render(); saveSoon(); return; }
     if (!state.roomLayout) state.seats = engine.buildSeatGrid(config, state.seats);
     const validNumbers = new Set(engine.studentsRequiringSeats(config).map((student) => student.number));
     state.seats.forEach((seat) => { if (seat.pin && !validNumbers.has(seat.pin)) seat.pin = null; });
-    state.assignment = {};
-    state.hasDrawn = false;
-    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    reconcileSeating();
     if (manual) manual.reset();
     selectedAdjustmentSeatId = null;
     render();
@@ -377,9 +522,20 @@
 
   function rotateLayout(direction) {
     if (document.body.classList.contains("drawing-mode")) return;
+    if (SeatMaster.classroomEditor?.editing) return;
     closeStudentProfile();
+    recordRoomEdit();
+    if(state.roomLayout?.version===3){
+      const S=SeatMaster.drawingScene,cw=direction==='clockwise',bounds={...state.classroomGeometry.bounds};
+      const roots=S.objects(state).filter(o=>o.kind==='table'||o.kind==='path'||o.kind==='seat'&&!o.tableId);
+      const topology=state.seatTopology;
+      SeatMaster.classroomGeometry.rotate(state.classroomGeometry,direction);
+      for(const o of roots)S.setBox(state,{kind:o.kind,id:o.id},{...o,x:cw?bounds.height-o.y:o.y,y:cw?o.x:bounds.width-o.x,rotation:S.angle(o.rotation+(cw?90:-90))});
+      if(topology?.confirmed)state.seatTopology={...topology,signature:SeatMaster.seatingConstraints.signature(state)};
+      render({keepInputs:true});saveSoon();return;
+    }
     if (state.roomLayout) {
-      recordRoomEdit();
+      if (state.classroomGeometry) SeatMaster.classroomGeometry.rotate(state.classroomGeometry, direction);
       state.roomLayout.tables.forEach((table) => {
         const oldX = table.x;
         table.x = direction === "clockwise" ? 100 - table.y : table.y;
@@ -397,6 +553,7 @@
       ui.showToast(i18n.t(direction === "clockwise" ? "toast.rotatedClockwise" : "toast.rotatedCounterclockwise"));
       return;
     }
+    if (state.classroomGeometry) SeatMaster.classroomGeometry.rotate(state.classroomGeometry, direction);
     const rotated = engine.rotateSeatLayout(state.config, state.seats, state.assignment, direction);
     state.config = engine.normalizeConfig(rotated.config);
     state.seats = rotated.seats;
@@ -419,6 +576,13 @@
 
   function applyRoomTemplate(template) {
     if (template === "grid" && !state.roomLayout) return;
+    if (state.hasDrawn || state.manualDraft || state.seats.some((seat) => seat.pin)) {
+      const before = state.seats.filter(seat => seat.type !== "aisle").length;
+      const students = engine.studentsRequiringSeats(state.config).length;
+      const after = template === "grid" ? engine.buildSeatGrid(state.config, state.seats).filter(seat => seat.type !== "aisle").length : Math.max(before, students);
+      const arranged = new Set([...Object.values(state.assignment), ...Object.values(state.manualDraft || {}), ...state.seats.map(seat => seat.pin)].filter(Number.isInteger)).size;
+      if (!window.confirm(i18n.t("confirm.layoutPreview", { before, after, students, affected: Math.max(0, arranged - after) }))) return;
+    }
     closeStudentProfile();
     recordRoomEdit();
     if (template === "grid") {
@@ -440,14 +604,14 @@
       state.seats = gridSeats;
       state.roomLayout = null;
       selectedTableId = null; selectedPathId = null;
-      if (state.hasDrawn && new Set(Object.values(state.assignment).filter(Number.isInteger)).size !== engine.studentsRequiringSeats(state.config).length) { state.hasDrawn = false; state.assignment = {}; }
+      reconcileSeating();
       if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
     } else {
       const created = SeatMaster.roomLayout.createTemplate(state, template);
       state.seats = created.seats;
       state.roomLayout = created.roomLayout;
       state.assignment = Object.fromEntries(state.seats.filter((seat) => seat.type !== "aisle").map((seat) => [seat.id, state.assignment[seat.id] ?? null]));
-      if (state.hasDrawn && new Set(Object.values(state.assignment).filter(Number.isInteger)).size !== engine.studentsRequiringSeats(state.config).length) { state.hasDrawn = false; state.assignment = {}; }
+      reconcileSeating();
       if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
       selectedTableId = state.roomLayout.tables[0]?.id || null;
       state.roomLayout.selectedTableId = selectedTableId;
@@ -522,6 +686,7 @@
     const layout = state.roomLayout;
     const table = layout?.tables.find((item) => item.id === selectedTableId);
     if (!layout || !table) return;
+    if (Number(count) < table.seatIds.length && !confirmSeatRemoval(table.seatIds.slice(Math.max(1, Number(count))))) { render({ keepInputs: true }); return; }
     if (!options.alreadyRecorded) recordRoomEdit();
     if (options.resetEdges) table.edgeCounts = null;
     const target = Math.max(1, Math.min(60, Math.round(Number(count) || 1)));
@@ -536,12 +701,7 @@
     });
     const addedSeat = [...table.seatIds].reverse().find((id) => !oldIds.has(id));
     if (addedSeat) layout.selectedSeatId = addedSeat;
-    if (state.hasDrawn) {
-      state.assignment = Object.fromEntries(state.seats.filter((seat) => seat.type !== "aisle").map((seat) => [seat.id, state.assignment[seat.id] ?? null]));
-      state.hasDrawn = Object.values(state.assignment).filter(Number.isInteger).length === engine.studentsRequiringSeats(state.config).length;
-      if (!state.hasDrawn) state.assignment = {};
-    }
-    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    reconcileSeating();
     if (!table.seatIds.includes(layout.selectedSeatId)) layout.selectedSeatId = null;
     render({ keepInputs: true }); saveSoon();
   }
@@ -570,13 +730,12 @@
     if (!layout || layout.tables.length < 2) { ui.showToast(i18n.t("room.keepOneTable"), "error"); return; }
     const table = layout.tables.find((item) => item.id === selectedTableId);
     if (!table) return;
+    if (!window.confirm(i18n.t("confirm.deleteTable", { count: table.seatIds.length }))) return;
     recordRoomEdit();
     const removed = new Set(table.seatIds);
     layout.tables = layout.tables.filter((item) => item.id !== selectedTableId);
     state.seats = state.seats.filter((seat) => !removed.has(seat.id));
-    state.assignment = {};
-    state.hasDrawn = false;
-    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    reconcileSeating();
     selectedTableId = layout.tables[0]?.id || null;
     layout.selectedTableId = selectedTableId;
     render({ keepInputs: true }); saveSoon();
@@ -618,12 +777,12 @@
   function cycleSeat(seatId) {
     const seat = state.seats.find((item) => item.id === seatId);
     if (!seat) return;
+    if ((state.hasDrawn || state.manualDraft || seat.pin) && !window.confirm(i18n.t("confirm.changeLayout"))) return;
+    preserveRecovery();
     ui.setValidationAnchor(`.seat[data-seat-id="${seatId}"]`);
     seat.type = engine.nextSeatType(seat.type);
     if (seat.type === "aisle") seat.pin = null;
-    state.assignment = {};
-    state.hasDrawn = false;
-    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    reconcileSeating();
     if (manual) manual.reset();
     selectedAdjustmentSeatId = null;
     render({ keepInputs: true });
@@ -634,14 +793,14 @@
     ui.setValidationAnchor(`[data-axis="${axis}"][data-index="${index}"]`);
     const seats = state.seats.filter((seat) => seat[axis] === index);
     if (!seats.length) return;
+    if ((state.hasDrawn || state.manualDraft || seats.some(seat => seat.pin)) && !window.confirm(i18n.t("confirm.changeLayout"))) return;
+    preserveRecovery();
     const nextType = engine.nextSeatType(seats[0].type);
     seats.forEach((seat) => {
       seat.type = nextType;
       if (nextType === "aisle") seat.pin = null;
     });
-    state.assignment = {};
-    state.hasDrawn = false;
-    if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
+    reconcileSeating();
     if (manual) manual.reset();
     selectedAdjustmentSeatId = null;
     render({ keepInputs: true });
@@ -649,8 +808,10 @@
   }
 
   function applyGenderPattern(pattern) {
+    if ((state.hasDrawn || state.manualDraft || state.seats.some(seat => seat.pin)) && !window.confirm(i18n.t("confirm.changeLayout"))) return;
+    preserveRecovery();
     closeStudentProfile();
-    const roomOrder = pattern === "tableSequence" && state.roomLayout
+    const roomOrder = state.roomLayout?.version === 3 ? SeatMaster.drawingScene.genderOrder(state) : pattern === "tableSequence" && state.roomLayout
       ? Object.fromEntries(state.roomLayout.tables.flatMap((table) => {
         const positions = new Map((table.seatPositions || []).map((position) => [position.id, position]));
         return table.seatIds
@@ -664,6 +825,7 @@
       : null;
     const result = engine.applyGenderPattern(state.config, state.seats, pattern, roomOrder);
     state.seats = result.seats;
+    state.genderPlan = {version:1,source:'teacher-pattern',strategy:pattern,preferences:{}};
     state.assignment = {};
     state.hasDrawn = false;
     if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
@@ -704,7 +866,12 @@
   function applyPin() {
     const seat = state.seats.find((item) => item.id === activePinSeatId);
     if (!seat) return;
+    if ((state.hasDrawn || state.manualDraft) && !window.confirm(i18n.t("confirm.changeLayout"))) return;
+    preserveRecovery();
     const value = Number.parseInt(document.getElementById("pinStudentSelect").value, 10);
+    const proposed=Object.fromEntries(state.seats.filter(item=>item.id===seat.id?Number.isInteger(value):item.pin).map(item=>[item.id,item.id===seat.id?value:item.pin]));
+    const report=SeatMaster.seatingConstraints.validateAssignment(state,proposed,{partial:true});
+    if(!report.valid){ui.showToast(report.errors.join(" "),"error");return false;}
     seat.pin = Number.isInteger(value) ? value : null;
     state.assignment = {};
     state.hasDrawn = false;
@@ -714,12 +881,15 @@
     render({ keepInputs: true });
     saveSoon();
     if (engine.validate(state).valid) ui.showToast(seat.pin ? i18n.t("toast.pinned", { number: seat.pin }) : i18n.t("toast.unpinned"));
+    return true;
   }
 
   function finishManual() {
     state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
     const pending = SeatMaster.manualSeating.remaining(state, state.manualDraft);
     if (pending.length) { ui.showToast(i18n.t("manual.incomplete", { count: pending.length }), "error"); return; }
+    const report=SeatMaster.seatingConstraints.validateAssignment(state,state.manualDraft);
+    if(!report.valid){ui.showToast(report.errors.join(" "),"error");return;}
     state.assignment = { ...state.manualDraft };
     state.hasDrawn = true;
     state.resultSource = "manual";
@@ -731,7 +901,13 @@
   }
 
   function enterPresentation() {
+    if(state.pendingSeatPins?.length){ui.showToast(SeatMaster.seatingConstraints.say('有預排需要重新指定位置，請先編輯教室。','Some priority placements need new seats. Edit the classroom first.'),'error');return;}
+    if (state.classroomGeometry && SeatMaster.classroomGeometry.overflow(state.classroomGeometry).length) {
+      ui.showToast(SeatMaster.seatingConstraints.say('有內容超出教室形狀，請先完成教室編輯。', 'Content is outside the room. Finish classroom editing first.'), 'error'); return;
+    }
+    SeatMaster.classroomEditor?.stop();
     if (adminMode === "manual") { finishManual(); return; }
+    if(state.hasDrawn){const constraints=SeatMaster.seatingConstraints.validateAssignment(state,state.assignment);if(!constraints.valid){ui.showToast(constraints.errors.join(" "),"error");return;}}
     const report = state.hasDrawn && state.resultSource === "manual" ? { valid: true } : engine.validate(state);
     if (!report.valid) {
       ui.showToast(i18n.t("toast.fixFirst"), "error");
@@ -750,9 +926,11 @@
     document.getElementById("drawMessage").textContent = i18n.t(state.hasDrawn ? state.resultSource === "manual" ? "manual.done" : "draw.done" : "draw.ready");
     updateSoundButton();
     render({ keepInputs: true });
+    document.getElementById('drawButton').focus({preventScroll:true});
   }
 
   function exitPresentation() {
+    pendingSolve?.abort();
     closeStudentProfile();
     if (seatTimeline) seatTimeline.cancel();
     seatTimeline = null;
@@ -802,11 +980,12 @@
     document.getElementById("studentProfileFrontName").textContent = name;
     document.getElementById("studentProfileName").textContent = name;
     const fields = document.getElementById("studentProfileFields");
-    fields.innerHTML = record.fields.length ? record.fields.map((field, index) => {
+    const publicFields = document.body.classList.contains("presentation-mode") ? [] : record.fields;
+    fields.innerHTML = publicFields.length ? publicFields.map((field, index) => {
       const sensitive = isSensitiveField(field.label);
       const value = sensitive ? "••••••••" : field.value;
       return `<div class="profile-field"><span>${ui.escapeHtml(field.label)}</span><div class="profile-value-row"><strong id="profileValue${index}" ${sensitive ? `data-actual="${ui.escapeHtml(field.value)}" data-sensitive="true"` : ""}>${ui.escapeHtml(value)}</strong>${sensitive ? `<button class="sensitive-toggle" type="button" data-target="profileValue${index}" aria-pressed="false">${ui.escapeHtml(i18n.t("profile.reveal"))}</button>` : ""}</div></div>`;
-    }).join("") : `<p class="profile-empty">${ui.escapeHtml(i18n.t("profile.noData"))}</p>`;
+    }).join("") : `<p class="profile-empty">${ui.escapeHtml(i18n.t("profile.publicOnly"))}</p>`;
     window.clearTimeout(profileFlipTimer);
     overlay.hidden = false;
     card.classList.remove("is-flipped");
@@ -827,13 +1006,14 @@
   }
 
   function setAdminMode(mode) {
+    SeatMaster.classroomEditor?.stop();
     if (!['layout', 'prearrange', 'manual', 'adjust'].includes(mode)) return;
     if (mode === "adjust" && !state.hasDrawn) return;
     adminMode = mode;
     selectedAdjustmentSeatId = null;
     if (mode === "manual") manual.start();
     render({ keepInputs: true });
-    saveSoon();
+    saveSoon(false);
   }
 
   function selectAdjustmentSeat(seatId) {
@@ -851,6 +1031,9 @@
     }
     const firstId = selectedAdjustmentSeatId;
     const firstSeat = state.seats.find((item) => item.id === firstId);
+    const proposed={...state.assignment,[firstId]:state.assignment[seatId],[seatId]:state.assignment[firstId]};
+    const report=SeatMaster.seatingConstraints.validateAssignment(state,proposed);
+    if(!report.valid){selectedAdjustmentSeatId=null;render({keepInputs:true});ui.showToast(report.errors.join(" "),"error");return;}
     [state.assignment[firstId], state.assignment[seatId]] = [state.assignment[seatId], state.assignment[firstId]];
     selectedAdjustmentSeatId = null;
     render({ keepInputs: true });
@@ -880,15 +1063,33 @@
     document.getElementById("drawButton").classList.remove("is-drawing");
   }
 
-  function startDraw() {
-    if (document.body.classList.contains("drawing-mode")) return;
+  async function startDraw() {
+    if (document.body.classList.contains("drawing-mode") || pendingSolve) return;
+    if(state.pendingSeatPins?.length){ui.showToast(SeatMaster.seatingConstraints.say('有預排需要重新指定位置，請先編輯教室。','Some priority placements need new seats. Edit the classroom first.'),'error');return;}
+    if (state.classroomGeometry && SeatMaster.classroomGeometry.overflow(state.classroomGeometry).length) {
+      ui.showToast(SeatMaster.seatingConstraints.say('有內容超出教室形狀，請先完成教室編輯。', 'Content is outside the room. Finish classroom editing first.'), 'error'); return;
+    }
+    SeatMaster.classroomEditor?.stop();
     closeStudentProfile();
     let assignment;
+    const snapshot=SeatMaster.classData.clone(state), stamp=SeatMaster.classData.content(storage.serializableState(state));
+    const request=new AbortController();pendingSolve=request;
+    document.getElementById("drawButton").disabled=true;
+    document.getElementById("cancelConstraintDraw").hidden=false;
     try {
-      assignment = engine.arrange(state);
+      const result=await SeatMaster.constrainedArranger.solve(snapshot,{signal:request.signal});
+      if(result.status==="cancelled")return;
+      if(result.status!=="solved"){
+        const message=result.status==="timeout"?SeatMaster.seatingConstraints.say("尚未找到符合結果，可再次計算或調整規則；並非已證明無解。","No solution found within the calculation budget. Retry or adjust rules; this is not proof of infeasibility."):(result.errors||[]).join(" ");
+        ui.showToast(message,"error");document.getElementById("drawMessage").textContent=message;return;
+      }
+      if(request.signal.aborted || stamp!==SeatMaster.classData.content(storage.serializableState(state)))return;
+      assignment=result.assignment;
     } catch (error) {
       ui.showToast(error.message.split("\n")[0], "error");
       return;
+    } finally {
+      if(pendingSolve===request){pendingSolve=null;document.getElementById("drawButton").disabled=false;document.getElementById("cancelConstraintDraw").hidden=true;}
     }
 
     const button = document.getElementById("drawButton");
@@ -898,12 +1099,13 @@
     if (seatTimeline) seatTimeline.cancel();
     resetDrawEffects();
     document.body.classList.add("drawing-mode");
+    document.body.classList.add("presentation-mode");
     setPresentationRotationDisabled(true);
     button.disabled = true;
     button.classList.add("is-drawing");
     message.textContent = i18n.t("draw.drawing");
 
-    render({ keepInputs: true });
+    render({ keepInputs: true, concealResult: true });
     ui.renderSeatGrid({ ...state, hasDrawn: false }, true, adminMode, null);
     document.getElementById("skipDrawButton").hidden = false;
     // Keep the previous assignment until the new result is actually revealed.
@@ -928,6 +1130,8 @@
         seatElements.forEach((element, index) => ui.renderRollingValue(element, state, samples[index % samples.length] || null, directory));
       },
       onReveal() {
+        const report=SeatMaster.seatingConstraints.validateAssignment(state,assignment);
+        if(stamp!==SeatMaster.classData.content(storage.serializableState(state)) || !report.valid){resetDrawEffects();ui.showToast(SeatMaster.seatingConstraints.say("條件已變更，原排位保留，請重新計算。","Conditions changed. Previous seating is kept; calculate again."),"error");return;}
         state.assignment = assignment;
         state.hasDrawn = true;
         state.resultSource = "draw";
@@ -998,7 +1202,7 @@
     document.querySelector(".control-panel").addEventListener("input", () => ui.setValidationAnchor(null), true);
     document.getElementById("pinStudentSelect").addEventListener("change", previewPin);
     document.getElementById("pinDialog").addEventListener("close", positionNotice);
-    ["classNameInput", "rowsInput", "colsInput", "maxNumberInput", "emptyNumbersInput", "seatExcludedNumbersInput", "femaleStartInput", "displayModeInput"].forEach((id) => {
+    ["roomAspectInput", "classNameInput", "rowsInput", "colsInput", "maxNumberInput", "emptyNumbersInput", "seatExcludedNumbersInput", "femaleStartInput", "displayModeInput"].forEach((id) => {
       document.getElementById(id).addEventListener("change", updateFromInputs);
     });
     document.getElementById("manualNonSeatStudents").addEventListener("click", (event) => {
@@ -1127,8 +1331,9 @@
       const table = seatHandle ? state.roomLayout.tables.find((item) => item.id === owner.dataset.tableId) : null;
       if (seatHandle) state.roomLayout.selectedSeatId = id;
       const item = seatHandle ? table.seatPositions.find((position) => position.id === id) : tableHandle ? state.roomLayout.tables.find((item) => item.id === id) : state.roomLayout.paths.find((pathItem) => pathItem.id === id);
+      const redoBeforeDrag = [...roomRedoStack];
       recordRoomEdit();
-      roomPointerDrag = { kind: seatHandle ? "seat" : tableHandle ? "table" : "path", id, tableId: table?.id, tableElement: table ? owner : null, rotation: table?.rotation || 0, rect, startX: event.clientX, startY: event.clientY, x: item.x, y: item.y, moved: false };
+      roomPointerDrag = { kind: seatHandle ? "seat" : tableHandle ? "table" : "path", id, tableId: table?.id, tableElement: table ? owner : null, rotation: table?.rotation || 0, rect, startX: event.clientX, startY: event.clientY, x: item.x, y: item.y, moved: false, redoBeforeDrag };
       roomCanvas.setPointerCapture(event.pointerId);
       event.preventDefault();
     });
@@ -1142,8 +1347,9 @@
         const bounds = drag.tableElement.getBoundingClientRect();
         const width = drag.tableElement.offsetWidth;
         const height = drag.tableElement.offsetHeight;
-        const dx = event.clientX - (bounds.left + bounds.width / 2);
-        const dy = event.clientY - (bounds.top + bounds.height / 2);
+        const sceneScale = SeatMaster.classroomEditor?.editing ? SeatMaster.classroomEditor.view.scale : 1;
+        const dx = (event.clientX - (bounds.left + bounds.width / 2)) / sceneScale;
+        const dy = (event.clientY - (bounds.top + bounds.height / 2)) / sceneScale;
         const angle = -drag.rotation * Math.PI / 180;
         const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
         const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
@@ -1270,13 +1476,19 @@
     });
 
     document.getElementById("pinForm").addEventListener("submit", (event) => {
-      if (event.submitter && event.submitter.value === "default") applyPin();
+      if (event.submitter && event.submitter.value === "default" && applyPin()===false) event.preventDefault();
     });
     document.getElementById("manualStartButton").addEventListener("click", () => { setAdminMode("manual"); document.getElementById("manualPanel").scrollIntoView({ block: "start" }); });
+    document.getElementById("presentationManualButton").addEventListener("click", () => {
+      exitPresentation(); setAdminMode("manual"); document.getElementById("manualPanel").scrollIntoView({ block: "start" });
+    });
+    document.getElementById("manualReviewRules").addEventListener("click",()=>{setAdminMode("prearrange");document.getElementById("separationDetails").open=true;document.getElementById("separationPanel").scrollIntoView({block:"center"});});
     document.querySelectorAll("[data-go-home]").forEach((button) => button.addEventListener("click", goHome));
     document.getElementById("presentationButton").addEventListener("click", enterPresentation);
     document.getElementById("adminButton").addEventListener("click", exitPresentation);
     document.getElementById("drawButton").addEventListener("click", startDraw);
+    document.getElementById("constraintRedrawButton").addEventListener("click",startDraw);
+    document.getElementById("cancelConstraintDraw").addEventListener("click",()=>pendingSolve?.abort());
     document.getElementById("skipDrawButton").addEventListener("click", () => { if (seatTimeline) seatTimeline.reveal(); });
     document.getElementById("rotateCounterclockwiseButton").addEventListener("click", () => rotateLayout("counterclockwise"));
     document.getElementById("rotateClockwiseButton").addEventListener("click", () => rotateLayout("clockwise"));
@@ -1314,23 +1526,35 @@
     document.getElementById("presentationFullscreenButton").addEventListener("click", toggleFullscreen);
     document.getElementById("classSelector").addEventListener("change", (event) => switchClass(event.target.value));
     document.getElementById("addClassButton").addEventListener("click", () => addClass(false));
-    document.getElementById("duplicateClassButton").addEventListener("click", () => addClass(true));
+    document.getElementById("duplicateClassButton").addEventListener("click", () => SeatMaster.classRecordsUI.openCopy());
     document.getElementById("deleteClassButton").addEventListener("click", deleteActiveClass);
-    document.getElementById("exportButton").addEventListener("click", () => { saveWorkspace(); storage.export(workspace); ui.showToast(i18n.t("toast.exported")); });
+    document.getElementById("exportButton").addEventListener("click", () => {
+      if (!window.confirm(i18n.t("confirm.fullBackup"))) return;
+      saveWorkspace(); storage.export(workspace); ui.showToast(i18n.t("toast.exported"));
+    });
     document.getElementById("importButton").addEventListener("click", () => document.getElementById("importFileInput").click());
     document.getElementById("importFileInput").addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
       try {
-        importClasses(await storage.readImport(file));
+        const incoming = await storage.readImport(file);
+        const count = incoming.classes.length;
+        const students = incoming.classes.reduce((sum, entry) => sum + engine.buildStudents(engine.normalizeConfig(entry.state.config)).length, 0);
+        if (!window.confirm(i18n.t("confirm.importPreview", { count, students, names: incoming.classes.map((entry) => entry.state.config.className || "—").join(", ") }))) return;
+        preserveRecovery();
+        if(!await importClasses(incoming))return;
+        SeatMaster.onboarding?.markMeaningfulActivity();
         ui.showToast(i18n.t("toast.imported"));
       } catch (error) {
         ui.showToast(error.message || i18n.t("toast.importFailed"), "error");
+        SeatMaster.onboarding?.reportImportError(error.message || i18n.t("toast.importFailed"));
       } finally {
         event.target.value = "";
       }
     });
     document.getElementById("clearPinsButton").addEventListener("click", () => {
+      if (!window.confirm(i18n.t("confirm.clearPins", { count: state.seats.filter((seat) => seat.pin).length }))) return;
+      preserveRecovery();
       state.seats.forEach((seat) => { seat.pin = null; });
       state.assignment = {};
       state.hasDrawn = false;
@@ -1341,8 +1565,9 @@
     });
     document.getElementById("resetButton").addEventListener("click", () => {
       if (!window.confirm(i18n.t("confirm.reset"))) return;
-      storage.clear();
-      workspace = { version: SeatMaster.constants.VERSION, activeClassId: "class-1", classes: [{ id: "class-1", state: hydrate(SeatMaster.createDefaultState()) }] };
+      preserveRecovery();
+      if (!storage.clear().ok) { ui.showToast(i18n.t("common.saveFailed"), "error"); return; }
+      const id=makeClassId();workspace = { version: SeatMaster.constants.VERSION, activeClassId: id, classes: [SeatMaster.classData.initializeEntry({ id, state: hydrate(SeatMaster.createDefaultState()) })] };
       state = workspace.classes[0].state;
       roomUndoStack = []; roomRedoStack = []; roomRangeEdits.clear();
       adminMode = "layout";
@@ -1350,12 +1575,24 @@
       selectedAdjustmentSeatId = null;
       saveWorkspace();
       render();
+      SeatMaster.onboarding?.reset();
       ui.showToast(i18n.t("toast.reset"));
+    });
+    document.getElementById("recoverButton").addEventListener("click", () => {
+      if (!recoveryWorkspace) return;
+      const previous = recoveryWorkspace;
+      preserveRecovery();
+      replaceWorkspace(previous);
+      SeatMaster.onboarding?.markMeaningfulActivity();
+      ui.showToast(i18n.t("workflow.recovered"));
     });
   }
 
   function init() {
-    workspace = storage.load() || { version: SeatMaster.constants.VERSION, activeClassId: "class-1", classes: [{ id: "class-1", state: SeatMaster.createDefaultState() }] };
+    const initialWorkspaceSnapshot = storage.load();
+    const id=makeClassId();
+    workspace = initialWorkspaceSnapshot ? JSON.parse(JSON.stringify(initialWorkspaceSnapshot)) : { version: SeatMaster.constants.VERSION, activeClassId: id, classes: [{ id, state: SeatMaster.createDefaultState() }] };
+    workspace.classes.forEach(SeatMaster.classData.initializeEntry);
     state = hydrate(activeClassEntry().state);
     activeClassEntry().state = state;
     manual = SeatMaster.manualSeating.createController(() => state, (persist = true) => { render({ keepInputs: true }); if (persist) saveSoon(); }, finishManual);
@@ -1363,10 +1600,27 @@
     i18n.apply();
     ui.populateRoomPositionOptions();
     bindEvents();
-    studentPicker = SeatMaster.studentDraw.init(() => state, updateSoundButton);
+    SeatMaster.workflow.init(() => state);
+    SeatMaster.onboarding.init();
+    const callbacks={getState:()=>state,getEntry:()=>{syncActiveClass();return activeClassEntry();},getWorkspace:()=>{syncActiveClass();return workspace;},commit:commitWorkspace,switchClass,copyClass:all=>addClass(all,!all)};
+    SeatMaster.classRecordsUI.init(callbacks);
+    SeatMaster.separationUI.init(callbacks);
+    SeatMaster.classroomEditor.init(() => state, () => { render({ keepInputs: true }); saveSoon(); }, {
+      record: recordRoomEdit, undo: undoRoomEdit, redo: redoRoomEdit,
+      begin:beginLayoutDraft,suspend:suspendLayoutDraft,finish:finishLayoutDraft,
+      dragging: () => !!roomPointerDrag,
+      cancelPointer: () => {
+        if (!roomPointerDrag) return;
+        roomRedoStack = roomPointerDrag.redoBeforeDrag; roomPointerDrag = null;
+        const before = roomUndoStack.pop(); if (before) restoreRoomEdit(before);
+      },
+      canUndo: () => roomUndoStack.length > 0, canRedo: () => roomRedoStack.length > 0
+    });
+    studentPicker = SeatMaster.studentDraw.init(() => state, updateSoundButton,saveWorkspace);
     groupPlannerUi = SeatMaster.groupUI.create(() => state, saveSoon);
     render();
     saveWorkspace();
+    SeatMaster.onboarding.startIfNeeded({ initialWorkspaceSnapshot });
   }
 
   init();
