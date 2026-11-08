@@ -5,7 +5,7 @@
   // One cancellable timeline for both seat draws and student draws.
   function run(options) {
     const { sound } = SeatMaster;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches || Boolean(window.document?.body?.classList.contains("calm-mode"));
     const timers = new Set();
     let revealed = false;
     let cancelled = false;
@@ -49,7 +49,7 @@
   }
 
   function celebrate(layer) {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || window.document?.body?.classList.contains("calm-mode")) return;
     const colors = ["#ffd166", "#ef8968", "#7fe0c1", "#b5b1ff", "#fff4d6"];
     layer.innerHTML = Array.from({ length: 70 }, (_, index) => `<i style="--left:${Math.random() * 100}%;--drift:${Math.random() * 240 - 120}px;--delay:${Math.random() * 0.35}s;--duration:${1.6 + Math.random()}s;--color:${colors[index % colors.length]}"></i>`).join("");
     layer.classList.remove("is-active");

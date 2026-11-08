@@ -4,7 +4,7 @@
   const { engine, ui, i18n, sound, effects } = sm;
   const STORAGE_KEY = "classroom-seat-master:student-draw";
 
-  function init(getState, onSoundChange) {
+  function init(getState, onSoundChange, persistClass) {
     const el = (id) => document.getElementById(id);
     const dialog = el("studentDrawDialog");
     let round = { key: "", history: [] };
@@ -13,16 +13,18 @@
     let timeline = null;
     let busy = false;
     let storageFailed = false;
+    let roundOwner=null;
 
     function syncRoster() {
-      const { config } = getState();
+      const current=getState(),{ config } = current;
       students = engine.buildStudents(config);
       names = engine.parseStudentNames(config.studentData, students);
-      const key = JSON.stringify([config.className, students.map((student) => [student.number, names.get(student.number) || ""])]);
-      if (round.key !== key) {
+      const key = current.rosterIdentity ? JSON.stringify(current.rosterIdentity.filter(row=>row.number!==null).map(row=>[row.studentId,row.number])) : JSON.stringify([config.className, students.map((student) => [student.number, names.get(student.number) || ""])]);
+      if (round.key !== key || roundOwner!==current) {
+        roundOwner=current;
         round = { key, history: [] };
         try {
-          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          const saved = persistClass ? current.studentDrawRound : JSON.parse(localStorage.getItem(STORAGE_KEY));
           const valid = new Set(students.map((student) => student.number));
           if (saved && saved.key === key && Array.isArray(saved.history) && saved.history.length <= 999 &&
               saved.history.every((batch) => Array.isArray(batch) && batch.length > 0 && batch.length <= students.length &&
@@ -37,6 +39,7 @@
     function label(number) { return `${i18n.t("seat.number", { number })}${names.get(number) ? ` ${names.get(number)}` : ""}`; }
 
     function saveRound() {
+      if(persistClass){getState().studentDrawRound=JSON.parse(JSON.stringify(round));storageFailed=!persistClass().ok;return;}
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(round)); storageFailed = false; }
       catch (_) { storageFailed = true; }
     }
