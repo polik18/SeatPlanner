@@ -4,7 +4,7 @@
   const $ = id => document.getElementById(id);
   const t = (...args) => SM.i18n.t(...args);
   let getState;
-  const selectors = { class: '#classSelector', room: '#gridDimensions', priority: '[data-admin-mode="prearrange"]', seat: '#manualStartButton', share: '#exportButton' };
+  const selectors = { class: '#classSelector', room: '#gridDimensions', priority: '[data-admin-mode="prearrange"]', separation: '#separationTitle', seat: '#manualStartButton', share: '#exportButton' };
   function reveal(element) {
     let parent = element;
     while (parent) { if (parent.tagName === 'DETAILS') parent.open = true; parent = parent.parentElement; }
@@ -12,6 +12,7 @@
   function go(key) {
     const target = document.querySelector(selectors[key]);
     if (!target) return;
+    if (key === 'separation') { $('separationDetails').open = true; target.tabIndex = 0; }
     reveal(target);
     if (key === 'priority') target.click();
     target.scrollIntoView({ block: 'center', behavior: 'instant' });

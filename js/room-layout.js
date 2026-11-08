@@ -62,6 +62,7 @@
 
   function normalize(layout, seats) {
     if (!layout || !Array.isArray(layout.tables)) return null;
+    if (layout.version === 3 && SM.drawingScene) return SM.drawingScene.normalize(layout);
     const validSeats = new Set((seats || []).filter((seat) => seat.type !== "aisle").map((seat) => seat.id));
     const used = new Set();
     const tables = layout.tables.filter((table) => table && typeof table.id === "string" && Array.isArray(table.seatIds)).map((table) => ({

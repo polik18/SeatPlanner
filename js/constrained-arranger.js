@@ -36,7 +36,8 @@
         if (!choices.length) return false;
         if (!chosen || choices.length < candidates.length || choices.length === candidates.length && relevant.get(student.number).length > relevant.get(chosen.number).length) { chosen=student; candidates=choices; }
       }
-      for (const id of shuffle(candidates)) {
+      const ordered=shuffle(candidates).sort((a,b)=>Number(state.genderPlan?.preferences?.[b]===chosen.gender)-Number(state.genderPlan?.preferences?.[a]===chosen.gender));
+      for (const id of ordered) {
         assignment[id]=chosen.number; occupied.add(id); located.set(chosen.number,id);
         if (yield* search(remaining.filter(s => s.number !== chosen.number))) return true;
         delete assignment[id]; occupied.delete(id); located.delete(chosen.number);

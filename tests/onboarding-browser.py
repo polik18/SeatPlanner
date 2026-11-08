@@ -73,9 +73,10 @@ try:
         expect(page.locator('#welcomeDialog')).not_to_be_visible()
         assert meta(page)['completed']
 
-        # Real editing closes the guide, and refresh never reopens it.
+        # The modal guide explicitly hands off to real editing.
         page.locator('#tutorialButton').click()
         page.locator('#welcomeStart').click()
+        page.locator('#tourTry').click()
         page.locator('#classNameInput').fill('我的班級')
         page.locator('#classNameInput').press('Tab')
         expect(page.locator('#tourPanel')).not_to_be_visible()
@@ -134,11 +135,7 @@ try:
             for _ in range(5):
                 box = page.locator('#tourNext').bounding_box()
                 assert box and box['x'] >= 0 and box['y'] >= 0 and box['x'] + box['width'] <= width + 1 and box['y'] + box['height'] <= height + 1
-                target_box = page.locator('.tour-target').bounding_box()
-                panel_box = page.locator('#tourPanel').bounding_box()
-                if target_box and panel_box:
-                    overlap = target_box['x'] < panel_box['x'] + panel_box['width'] and target_box['x'] + target_box['width'] > panel_box['x'] and target_box['y'] < panel_box['y'] + panel_box['height'] and target_box['y'] + target_box['height'] > panel_box['y']
-                    assert not overlap, (label, target_box, panel_box)
+                assert page.locator('#tourDialog').evaluate('(e) => e.matches(":modal")')
                 page.locator('#tourNext').click()
             page.locator('#readyCreate').click()
             page.evaluate('window.scrollTo(0,0); document.querySelector(".classroom-stage").scrollTop=0;document.querySelector(".control-panel").scrollTop=0')

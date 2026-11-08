@@ -26,7 +26,8 @@
     const state=api.getState(),nodes=C.points(state),byId=new Map(nodes.map(p=>[p.id,p]));
     const label=id=>{const seat=state.seats.find(item=>item.id===id);if(!seat)return say('已移除座位','Removed seat');const coordinate=SM.ui.columnLabel(seat.col)+(seat.row+1);const tableIndex=state.roomLayout?.tables.findIndex(table=>table.seatIds.includes(id));return tableIndex>=0?say(`${tableIndex+1} 桌 ${coordinate}`,`Table ${tableIndex+1} ${coordinate}`):coordinate;};
     const left=Math.min(0,...nodes.map(p=>p.x))-5,top=Math.min(0,...nodes.map(p=>p.y))-5,right=Math.max(100,...nodes.map(p=>p.x))+5,bottom=Math.max(100,...nodes.map(p=>p.y))+5;
-    $('topologyPreview').innerHTML=`<svg viewBox="${left} ${top} ${right-left} ${bottom-top}" role="img" aria-label="${say('座位鄰接圖','Seat adjacency map')}">${edges.map(([a,b])=>byId.has(a)&&byId.has(b)?`<line x1="${byId.get(a).x}" y1="${byId.get(a).y}" x2="${byId.get(b).x}" y2="${byId.get(b).y}" stroke="#9d6a34" stroke-width=".5"/>`:'').join('')}${nodes.map(p=>`<circle cx="${p.x}" cy="${p.y}" r="1.5" fill="#36513a"/><text x="${p.x+1.7}" y="${p.y-1.5}" font-size="2.5">${esc(label(p.id))}</text>`).join('')}</svg>`;
+    const unit=Math.max(right-left,bottom-top)/110;
+    $('topologyPreview').innerHTML=`<svg viewBox="${left} ${top} ${right-left} ${bottom-top}" role="img" aria-label="${say('座位鄰接圖','Seat adjacency map')}">${edges.map(([a,b])=>byId.has(a)&&byId.has(b)?`<line x1="${byId.get(a).x}" y1="${byId.get(a).y}" x2="${byId.get(b).x}" y2="${byId.get(b).y}" stroke="#9d6a34" stroke-width="${unit*.5}"/>`:'').join('')}${nodes.map(p=>`<circle cx="${p.x}" cy="${p.y}" r="${unit*1.5}" fill="#36513a"/><text x="${p.x+unit*1.7}" y="${p.y-unit*1.5}" font-size="${unit*2.5}">${esc(label(p.id))}</text>`).join('')}</svg>`;
     $('topologyEdges').innerHTML=edges.map(([a,b],index)=>`<label><input type="checkbox" data-topology-edge="${index}" checked />${esc(label(a))} ↔ ${esc(label(b))}</label>`).join('');
     for(const id of ['topologySeatA','topologySeatB'])$(id).innerHTML=nodes.map(node=>`<option value="${esc(node.id)}">${esc(label(node.id))}</option>`).join('');
     if($('topologySeatB').options.length>1)$('topologySeatB').selectedIndex=1;
@@ -35,7 +36,7 @@
     $('topologyAddEdge').disabled=$('topologySuggest').disabled=!state.roomLayout;
     document.querySelectorAll('[data-topology-edge]').forEach(node=>{node.disabled=!state.roomLayout;});
   }
-  function openTopology(){const state=api.getState();topologySignature=C.signature(state);edges=state.roomLayout&&state.seatTopology?.signature===topologySignature?D.clone(state.seatTopology.edges):C.suggest(state);drawTopology();$('topologyDialog').showModal();}
+  function openTopology(){const state=api.getState();topologySignature=C.signature(state);edges=state.roomLayout?.version===3?C.refreshTopology(state).edges:state.roomLayout&&state.seatTopology?.signature===topologySignature?D.clone(state.seatTopology.edges):C.suggest(state);drawTopology();$('topologyDialog').showModal();}
   function init(callbacks){api=callbacks;
     $('ruleSearch').addEventListener('input',render);
     $('saveSeparationRule').addEventListener('click',()=>{
@@ -54,7 +55,7 @@
     $('topologySuggest').addEventListener('click',()=>{edges=C.suggest(api.getState());drawTopology();});
     $('topologyEdges').addEventListener('change',event=>{const index=event.target.dataset.topologyEdge;if(index!==undefined){edges.splice(Number(index),1);drawTopology();}});
     $('topologyAddEdge').addEventListener('click',()=>{const a=$('topologySeatA').value,b=$('topologySeatB').value;if(a&&b&&a!==b&&!edges.some(edge=>C.edgeKey(...edge)===C.edgeKey(a,b))){edges.push([a,b]);drawTopology();}});
-    $('topologyConfirm').addEventListener('click',()=>{if(C.signature(api.getState())!==topologySignature){$('topologyNotice').textContent=say('布局已變更，請重新開啟預覽。','Layout changed. Reopen the preview.');return;}if(api.commit(candidate=>{checkpoint(candidate).seatTopology={confirmed:true,signature:topologySignature,edges:D.clone(edges)};}))$('topologyDialog').close();});
+    $('topologyConfirm').addEventListener('click',()=>{if(C.signature(api.getState())!==topologySignature){$('topologyNotice').textContent=say('布局已變更，請重新開啟預覽。','Layout changed. Reopen the preview.');return;}if(api.commit(candidate=>{const state=checkpoint(candidate);state.seatTopology=C.confirmTopology(state,D.clone(edges));}))$('topologyDialog').close();});
     $('reviewRosterButton').addEventListener('click',async()=>{const config=D.clone(api.getState().config),choices=await SM.classRecordsUI.reviewRoster(config);if(choices)api.commit(candidate=>{D.applyIdentity(checkpoint(candidate),config,choices);});});
     window.addEventListener('seatmaster:languagechange',render);render();
   }

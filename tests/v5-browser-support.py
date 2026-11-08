@@ -27,7 +27,10 @@ def workspace(page):return page.evaluate('(key)=>JSON.parse(localStorage.getItem
 def active(page):
     page.wait_for_timeout(220)
     value=workspace(page)
-    return next(entry for entry in value['classes'] if entry['id']==value['activeClassId'])
+    entry=next(entry for entry in value['classes'] if entry['id']==value['activeClassId'])
+    if page.locator('#classroomWorkspace').is_visible() and entry['state'].get('layoutDraft'):
+        entry={**entry,'state':entry['state']['layoutDraft']}
+    return entry
 def save_record(page,label):
     page.locator('#saveClassButton').click();page.locator('#classRecordName').fill(label);page.locator('#saveClassRecordButton').click()
 def rule(page,a=1,b=2,same_table=False):

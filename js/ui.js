@@ -106,6 +106,7 @@
 
   function renderRoomMarkers(state) {
     document.querySelectorAll("[data-room-slot]").forEach((slot) => { slot.innerHTML = ""; });
+    if (state.classroomGeometry) return;
     [
       { key: "boardPosition", type: "board", icon: "▰", label: "room.board", lengthKey: "boardLength", offsetKey: "boardOffset", sizeKey: "boardSize" },
       { key: "doorPosition", type: "door", icon: "▯", label: "room.door", offsetKey: "doorOffset", sizeKey: "doorSize" },
@@ -171,10 +172,33 @@
 
   function renderSeatGrid(state, presentation, adminMode, selectedSeatId) {
     const grid = document.getElementById("seatGrid");
+    document.querySelector('.room-layout').style.setProperty('--room-aspect', state.config.roomAspect === 'portrait' ? '3 / 4' : '4 / 3');
     const dimensionControls = document.getElementById("gridDimensions");
+    if (state.roomLayout?.version === 3) {
+      document.querySelectorAll('[data-gender-pattern]').forEach(button=>{
+        button.hidden=button.dataset.genderPattern==='tableSequence'&&!state.roomLayout.tables.length;
+      });
+      grid.className = 'room-canvas drawing-canvas'; grid.removeAttribute('style');
+      if (dimensionControls) dimensionControls.hidden = true;
+      const directory = SeatMaster.engine.parseStudentNames(state.config.studentData, SeatMaster.engine.buildStudents(state.config));
+      const c=state.classroomGeometry.content, scene=SeatMaster.drawingScene;
+      const seatHtml=(seat,p,rotation=0)=>`<div class="seat drawing-seat" data-seat-id="${escapeHtml(seat.id)}" data-drawing-kind="seat" data-drawing-id="${escapeHtml(seat.id)}" data-type="${presentation?'general':seat.type}" role="button" tabindex="0" style="left:${p.x}%;top:${p.y}%;width:${p.width||42}px;height:${p.height||32}px;transform:translate(-50%,-50%) rotate(${p.angle||0}deg)"><div style="transform:rotate(${-rotation-(p.angle||0)}deg)">${seatContent(seat,state,presentation,directory,adminMode)}</div></div>`;
+      const seats=new Map(state.seats.map(s=>[s.id,s]));
+      const html=state.roomLayout.paths.map(p=>`<div class="room-path" data-drawing-kind="path" data-drawing-id="${escapeHtml(p.id)}" data-path-id="${escapeHtml(p.id)}" style="left:${p.x}%;top:${p.y}%;width:${p.width}%;height:${p.height}%;transform:rotate(${p.rotation||0}deg)">${escapeHtml(p.label||'主要通道')}</div>`);
+      state.roomLayout.tables.forEach(t=>{
+        const tb=scene.tableBox(state,t),arm=Math.min(tb.width,tb.height)*(t.geometry?.armThickness||12)/100;
+        html.push(`<div class="room-table room-table-${t.type} ${t.type==='u'?'room-table-u-open-'+(t.geometry?.opening||'bottom'):''}" data-table-id="${escapeHtml(t.id)}" data-drawing-kind="table" data-drawing-id="${escapeHtml(t.id)}" style="left:${t.x}%;top:${t.y}%;width:${t.width}%;height:${t.height}%;transform:translate(-50%,-50%) rotate(${t.rotation}deg)"><div class="room-table-surface" ${t.type==='u'?`style="border-width:${arm}px;border-bottom-width:0"`:''}></div><span class="drawing-table-caption">${escapeHtml(i18n.t('room.table',{number:state.roomLayout.tables.indexOf(t)+1}))}</span>${t.seatPositions.map(p=>seats.has(p.id)?seatHtml(seats.get(p.id),p,t.rotation):'').join('')}</div>`);
+      });
+      state.roomLayout.looseSeats.forEach(p=>{if(seats.has(p.id))html.push(seatHtml(seats.get(p.id),p));});
+      grid.innerHTML=html.join('');
+      document.getElementById('roomLayoutToolbar').hidden=true;
+      document.getElementById('roomGeometryStatus').hidden=true;
+      return;
+    }
     if (state.roomLayout && Array.isArray(state.roomLayout.tables)) {
       grid.className = `room-canvas${state.roomLayout.editing && !presentation ? " is-editing" : ""}`;
       grid.removeAttribute("style");
+      grid.style.aspectRatio = state.config.roomAspect === 'portrait' ? '3 / 4' : '4 / 3';
       grid.style.zoom = String(state.roomLayout.zoom || 1);
       if (dimensionControls) dimensionControls.hidden = true;
       const students = SeatMaster.engine.buildStudents(state.config);
@@ -366,6 +390,7 @@
   function fillInputs(state) {
     const mapping = {
       classNameInput: "className",
+      roomAspectInput: "roomAspect",
       rowsInput: "rows",
       colsInput: "cols",
       maxNumberInput: "maxNumber",

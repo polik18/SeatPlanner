@@ -23,6 +23,32 @@
   let recoveryWorkspace = null;
   let pendingSolve = null;
   let updatingRoster = false;
+  let layoutEditSession = null;
+  function beginLayoutDraft() {
+    if(layoutEditSession)return;
+    const resume=state.layoutDraft,base=SeatMaster.classData.clone(state);delete base.layoutDraft;
+    layoutEditSession={base};delete state.layoutDraft;
+    if(resume){const restored=hydrate(resume);if(resume.hasDrawn&&!restored.hasDrawn){const ids=new Set(restored.seats.map(s=>s.id)),numbers=new Set(engine.studentsRequiringSeats(restored.config).map(s=>s.number)),seen=new Set();const kept=Object.fromEntries(Object.entries(resume.assignment||{}).filter(([id,n])=>ids.has(id)&&numbers.has(n)&&!seen.has(n)&&seen.add(n)));restored.manualDraft={...restored.manualDraft,...kept};}for(const key of Object.keys(state))delete state[key];Object.assign(state,restored);}
+    SeatMaster.drawingScene.upgrade(state);roomUndoStack=[];roomRedoStack=[];
+  }
+  function suspendLayoutDraft() {
+    if(!layoutEditSession)return;
+    saveWorkspace();
+    const draft=SeatMaster.classData.clone(state),base=layoutEditSession.base;delete draft.layoutDraft;
+    layoutEditSession=null;for(const key of Object.keys(state))delete state[key];Object.assign(state,hydrate(base),{layoutDraft:draft});
+  }
+  async function finishLayoutDraft(signal,onProgress) {
+    if(!layoutEditSession)return{status:'invalid',errors:['沒有正在編輯的教室。']};
+    const stamp=JSON.stringify(state),result=await SeatMaster.layoutPlanner.prepare(state,{signal,onProgress});
+    if(result.status!=='solved')return result;
+    if(signal.aborted||stamp!==JSON.stringify(state))return{status:'cancelled'};
+    syncActiveClass();const candidate=SeatMaster.classData.clone(workspace);
+    candidate.classes.find(entry=>entry.id===candidate.activeClassId).state=result.state;
+    const saved=storage.save(candidate);reportStorageResult(saved);
+    if(!saved.ok)return{status:'invalid',errors:['無法保存配置，請先匯出備份或釋放儲存空間。']};
+    layoutEditSession=null;for(const key of Object.keys(state))delete state[key];Object.assign(state,result.state);syncActiveClass();manual.reset();
+    return{status:'solved'};
+  }
   function reportStorageResult(result){
     const node=document.getElementById("classStorageError");
     node.hidden=result.ok;
@@ -31,6 +57,7 @@
   }
 
   function commitWorkspace(mutator) {
+    SeatMaster.classroomEditor?.stop();
     syncActiveClass();
     const candidate = SeatMaster.classData.clone(workspace);
     try { mutator(candidate); candidate.classes.forEach(SeatMaster.classData.initializeEntry); }
@@ -95,7 +122,10 @@
   function saveWorkspace() {
     syncActiveClass();
     workspace.classes.forEach(SeatMaster.classData.initializeEntry);
-    const result = storage.save(workspace);
+    const saving = layoutEditSession || SeatMaster.classroomEditor?.dragging ? SeatMaster.classData.clone(workspace) : workspace;
+    if(layoutEditSession){const entry=saving.classes.find(entry=>entry.id===saving.activeClassId);entry.state={...SeatMaster.classData.clone(layoutEditSession.base),layoutDraft:SeatMaster.classroomEditor?.savingState||SeatMaster.classData.clone(state)};delete entry.state.layoutDraft.layoutDraft;}
+    else if (saving !== workspace) saving.classes.find(entry => entry.id === saving.activeClassId).state.classroomGeometry = SeatMaster.classroomEditor.savingGeometry;
+    const result = storage.save(saving);
     reportStorageResult(result);
     ui.setSaveStatus(i18n.t(result.ok ? "common.saved" : "common.saveFailed"));
     document.getElementById("saveStatus").classList.toggle("is-error", !result.ok);
@@ -128,7 +158,8 @@
       resultSource: value.resultSource,
       manualDraft: value.manualDraft,
       activities: value.activities,
-      roomLayout: value.roomLayout
+      roomLayout: value.roomLayout,
+      classroomGeometry: value.classroomGeometry || null
     };
   }
 
@@ -144,6 +175,7 @@
   }
 
   function replaceWorkspace(incoming, persist = true) {
+    SeatMaster.classroomEditor?.stop();
     workspace = incoming;
     state = hydrate(activeClassEntry().state);
     activeClassEntry().state = state;
@@ -159,6 +191,7 @@
 
   function switchClass(id) {
     if (!workspace || id === workspace.activeClassId || !workspace.classes.some((entry) => entry.id === id)) return;
+    SeatMaster.classroomEditor?.stop();
     pendingSolve?.abort();
     closeStudentProfile();
     if (seatTimeline) seatTimeline.cancel();
@@ -178,11 +211,13 @@
   }
 
   function addClass(copyCurrent = false, layoutOnly = false) {
+    SeatMaster.classroomEditor?.stop();
     SeatMaster.onboarding?.markMeaningfulActivity();
     const source = copyCurrent ? JSON.parse(JSON.stringify(state)) : SeatMaster.createDefaultState();
     if (layoutOnly) {
       source.config={...state.config,studentData:"",maxNumber:1,emptyNumbers:"1",seatExcludedNumbers:"",femaleStart:2};
       source.seats=state.seats.map(seat=>({...seat,pin:null})); source.roomLayout=SeatMaster.classData.clone(state.roomLayout);
+      if (state.classroomGeometry) source.classroomGeometry=SeatMaster.classData.clone(state.classroomGeometry);
     }
     source.studentDrawRound=null;
     const number = workspace.classes.length + 1;
@@ -244,7 +279,7 @@
   }
 
   function roomEditSnapshot() {
-    return JSON.parse(JSON.stringify({ roomLayout: state.roomLayout, seats: state.seats, assignment: state.assignment, hasDrawn: state.hasDrawn, manualDraft: state.manualDraft || null }));
+    return JSON.parse(JSON.stringify({ config: state.config, seatTopology: state.seatTopology, roomLayout: state.roomLayout, classroomGeometry: state.classroomGeometry || null, seats: state.seats, assignment: state.assignment, hasDrawn: state.hasDrawn, manualDraft: state.manualDraft || null, pendingSeatPins:state.pendingSeatPins||[],genderPlan:state.genderPlan||null,layoutCheck:state.layoutCheck||null }));
   }
 
   function recordRoomEdit() {
@@ -255,14 +290,18 @@
   }
 
   function restoreRoomEdit(snapshot) {
+    state.config = snapshot.config;
+    state.seatTopology = snapshot.seatTopology;
     state.roomLayout = snapshot.roomLayout;
+    state.classroomGeometry = snapshot.classroomGeometry;
     state.seats = snapshot.seats;
     state.assignment = snapshot.assignment;
     state.hasDrawn = snapshot.hasDrawn;
     state.manualDraft = snapshot.manualDraft;
+    state.pendingSeatPins=snapshot.pendingSeatPins;state.genderPlan=snapshot.genderPlan;state.layoutCheck=snapshot.layoutCheck;
     selectedTableId = state.roomLayout?.selectedTableId || null;
     selectedPathId = state.roomLayout?.selectedPathId || null;
-    render({ keepInputs: true });
+    render();
     saveSoon();
   }
 
@@ -306,7 +345,7 @@
     const hydrated = { version: SeatMaster.constants.VERSION, config, seats, assignment: resultValid ? assignment : {}, hasDrawn: resultValid,
       resultSource: rawState && rawState.resultSource === "manual" ? "manual" : "draw", manualDraft: null,
       activities: Array.isArray(rawState && rawState.activities) ? rawState.activities : [], roomLayout };
-    for(const key of ["rosterIdentity","seatingConstraints","seatTopology","studentDrawRound"]) if(rawState?.[key]!==undefined) hydrated[key]=SeatMaster.classData.clone(rawState[key]);
+    for(const key of ["rosterIdentity","seatingConstraints","seatTopology","studentDrawRound","classroomGeometry","layoutDraft","pendingSeatPins","genderPlan","layoutCheck"]) if(rawState?.[key]!==undefined) hydrated[key]=SeatMaster.classData.clone(rawState[key]);
     SeatMaster.classData.ensure(hydrated);
     if (rawState && rawState.manualDraft && typeof rawState.manualDraft === "object") hydrated.manualDraft = SeatMaster.manualSeating.normalize(hydrated, rawState.manualDraft);
     hydrated.adminMode = ["layout", "prearrange", "manual", "adjust"].includes(rawState && rawState.adminMode) ? rawState.adminMode : hydrated.manualDraft ? "manual" : "layout";
@@ -347,6 +386,7 @@
     SeatMaster.workflow?.render(state);
     SeatMaster.classRecordsUI?.render();
     SeatMaster.separationUI?.render();
+    SeatMaster.classroomEditor?.render(state);
     document.documentElement.style.setProperty("--header-height",document.querySelector(".app-header").offsetHeight+"px");
   }
 
@@ -378,6 +418,7 @@
   function readConfigFromInputs() {
     return engine.normalizeConfig({
       className: document.getElementById("classNameInput").value,
+      roomAspect: document.getElementById("roomAspectInput").value,
       rows: document.getElementById("rowsInput").value,
       cols: document.getElementById("colsInput").value,
       maxNumber: document.getElementById("maxNumberInput").value,
@@ -481,9 +522,20 @@
 
   function rotateLayout(direction) {
     if (document.body.classList.contains("drawing-mode")) return;
+    if (SeatMaster.classroomEditor?.editing) return;
     closeStudentProfile();
+    recordRoomEdit();
+    if(state.roomLayout?.version===3){
+      const S=SeatMaster.drawingScene,cw=direction==='clockwise',bounds={...state.classroomGeometry.bounds};
+      const roots=S.objects(state).filter(o=>o.kind==='table'||o.kind==='path'||o.kind==='seat'&&!o.tableId);
+      const topology=state.seatTopology;
+      SeatMaster.classroomGeometry.rotate(state.classroomGeometry,direction);
+      for(const o of roots)S.setBox(state,{kind:o.kind,id:o.id},{...o,x:cw?bounds.height-o.y:o.y,y:cw?o.x:bounds.width-o.x,rotation:S.angle(o.rotation+(cw?90:-90))});
+      if(topology?.confirmed)state.seatTopology={...topology,signature:SeatMaster.seatingConstraints.signature(state)};
+      render({keepInputs:true});saveSoon();return;
+    }
     if (state.roomLayout) {
-      recordRoomEdit();
+      if (state.classroomGeometry) SeatMaster.classroomGeometry.rotate(state.classroomGeometry, direction);
       state.roomLayout.tables.forEach((table) => {
         const oldX = table.x;
         table.x = direction === "clockwise" ? 100 - table.y : table.y;
@@ -501,6 +553,7 @@
       ui.showToast(i18n.t(direction === "clockwise" ? "toast.rotatedClockwise" : "toast.rotatedCounterclockwise"));
       return;
     }
+    if (state.classroomGeometry) SeatMaster.classroomGeometry.rotate(state.classroomGeometry, direction);
     const rotated = engine.rotateSeatLayout(state.config, state.seats, state.assignment, direction);
     state.config = engine.normalizeConfig(rotated.config);
     state.seats = rotated.seats;
@@ -758,7 +811,7 @@
     if ((state.hasDrawn || state.manualDraft || state.seats.some(seat => seat.pin)) && !window.confirm(i18n.t("confirm.changeLayout"))) return;
     preserveRecovery();
     closeStudentProfile();
-    const roomOrder = pattern === "tableSequence" && state.roomLayout
+    const roomOrder = state.roomLayout?.version === 3 ? SeatMaster.drawingScene.genderOrder(state) : pattern === "tableSequence" && state.roomLayout
       ? Object.fromEntries(state.roomLayout.tables.flatMap((table) => {
         const positions = new Map((table.seatPositions || []).map((position) => [position.id, position]));
         return table.seatIds
@@ -772,6 +825,7 @@
       : null;
     const result = engine.applyGenderPattern(state.config, state.seats, pattern, roomOrder);
     state.seats = result.seats;
+    state.genderPlan = {version:1,source:'teacher-pattern',strategy:pattern,preferences:{}};
     state.assignment = {};
     state.hasDrawn = false;
     if (state.manualDraft) state.manualDraft = SeatMaster.manualSeating.normalize(state, state.manualDraft);
@@ -847,6 +901,11 @@
   }
 
   function enterPresentation() {
+    if(state.pendingSeatPins?.length){ui.showToast(SeatMaster.seatingConstraints.say('有預排需要重新指定位置，請先編輯教室。','Some priority placements need new seats. Edit the classroom first.'),'error');return;}
+    if (state.classroomGeometry && SeatMaster.classroomGeometry.overflow(state.classroomGeometry).length) {
+      ui.showToast(SeatMaster.seatingConstraints.say('有內容超出教室形狀，請先完成教室編輯。', 'Content is outside the room. Finish classroom editing first.'), 'error'); return;
+    }
+    SeatMaster.classroomEditor?.stop();
     if (adminMode === "manual") { finishManual(); return; }
     if(state.hasDrawn){const constraints=SeatMaster.seatingConstraints.validateAssignment(state,state.assignment);if(!constraints.valid){ui.showToast(constraints.errors.join(" "),"error");return;}}
     const report = state.hasDrawn && state.resultSource === "manual" ? { valid: true } : engine.validate(state);
@@ -867,6 +926,7 @@
     document.getElementById("drawMessage").textContent = i18n.t(state.hasDrawn ? state.resultSource === "manual" ? "manual.done" : "draw.done" : "draw.ready");
     updateSoundButton();
     render({ keepInputs: true });
+    document.getElementById('drawButton').focus({preventScroll:true});
   }
 
   function exitPresentation() {
@@ -946,6 +1006,7 @@
   }
 
   function setAdminMode(mode) {
+    SeatMaster.classroomEditor?.stop();
     if (!['layout', 'prearrange', 'manual', 'adjust'].includes(mode)) return;
     if (mode === "adjust" && !state.hasDrawn) return;
     adminMode = mode;
@@ -1004,6 +1065,11 @@
 
   async function startDraw() {
     if (document.body.classList.contains("drawing-mode") || pendingSolve) return;
+    if(state.pendingSeatPins?.length){ui.showToast(SeatMaster.seatingConstraints.say('有預排需要重新指定位置，請先編輯教室。','Some priority placements need new seats. Edit the classroom first.'),'error');return;}
+    if (state.classroomGeometry && SeatMaster.classroomGeometry.overflow(state.classroomGeometry).length) {
+      ui.showToast(SeatMaster.seatingConstraints.say('有內容超出教室形狀，請先完成教室編輯。', 'Content is outside the room. Finish classroom editing first.'), 'error'); return;
+    }
+    SeatMaster.classroomEditor?.stop();
     closeStudentProfile();
     let assignment;
     const snapshot=SeatMaster.classData.clone(state), stamp=SeatMaster.classData.content(storage.serializableState(state));
@@ -1136,7 +1202,7 @@
     document.querySelector(".control-panel").addEventListener("input", () => ui.setValidationAnchor(null), true);
     document.getElementById("pinStudentSelect").addEventListener("change", previewPin);
     document.getElementById("pinDialog").addEventListener("close", positionNotice);
-    ["classNameInput", "rowsInput", "colsInput", "maxNumberInput", "emptyNumbersInput", "seatExcludedNumbersInput", "femaleStartInput", "displayModeInput"].forEach((id) => {
+    ["roomAspectInput", "classNameInput", "rowsInput", "colsInput", "maxNumberInput", "emptyNumbersInput", "seatExcludedNumbersInput", "femaleStartInput", "displayModeInput"].forEach((id) => {
       document.getElementById(id).addEventListener("change", updateFromInputs);
     });
     document.getElementById("manualNonSeatStudents").addEventListener("click", (event) => {
@@ -1265,8 +1331,9 @@
       const table = seatHandle ? state.roomLayout.tables.find((item) => item.id === owner.dataset.tableId) : null;
       if (seatHandle) state.roomLayout.selectedSeatId = id;
       const item = seatHandle ? table.seatPositions.find((position) => position.id === id) : tableHandle ? state.roomLayout.tables.find((item) => item.id === id) : state.roomLayout.paths.find((pathItem) => pathItem.id === id);
+      const redoBeforeDrag = [...roomRedoStack];
       recordRoomEdit();
-      roomPointerDrag = { kind: seatHandle ? "seat" : tableHandle ? "table" : "path", id, tableId: table?.id, tableElement: table ? owner : null, rotation: table?.rotation || 0, rect, startX: event.clientX, startY: event.clientY, x: item.x, y: item.y, moved: false };
+      roomPointerDrag = { kind: seatHandle ? "seat" : tableHandle ? "table" : "path", id, tableId: table?.id, tableElement: table ? owner : null, rotation: table?.rotation || 0, rect, startX: event.clientX, startY: event.clientY, x: item.x, y: item.y, moved: false, redoBeforeDrag };
       roomCanvas.setPointerCapture(event.pointerId);
       event.preventDefault();
     });
@@ -1280,8 +1347,9 @@
         const bounds = drag.tableElement.getBoundingClientRect();
         const width = drag.tableElement.offsetWidth;
         const height = drag.tableElement.offsetHeight;
-        const dx = event.clientX - (bounds.left + bounds.width / 2);
-        const dy = event.clientY - (bounds.top + bounds.height / 2);
+        const sceneScale = SeatMaster.classroomEditor?.editing ? SeatMaster.classroomEditor.view.scale : 1;
+        const dx = (event.clientX - (bounds.left + bounds.width / 2)) / sceneScale;
+        const dy = (event.clientY - (bounds.top + bounds.height / 2)) / sceneScale;
         const angle = -drag.rotation * Math.PI / 180;
         const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
         const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
@@ -1411,6 +1479,9 @@
       if (event.submitter && event.submitter.value === "default" && applyPin()===false) event.preventDefault();
     });
     document.getElementById("manualStartButton").addEventListener("click", () => { setAdminMode("manual"); document.getElementById("manualPanel").scrollIntoView({ block: "start" }); });
+    document.getElementById("presentationManualButton").addEventListener("click", () => {
+      exitPresentation(); setAdminMode("manual"); document.getElementById("manualPanel").scrollIntoView({ block: "start" });
+    });
     document.getElementById("manualReviewRules").addEventListener("click",()=>{setAdminMode("prearrange");document.getElementById("separationDetails").open=true;document.getElementById("separationPanel").scrollIntoView({block:"center"});});
     document.querySelectorAll("[data-go-home]").forEach((button) => button.addEventListener("click", goHome));
     document.getElementById("presentationButton").addEventListener("click", enterPresentation);
@@ -1534,6 +1605,17 @@
     const callbacks={getState:()=>state,getEntry:()=>{syncActiveClass();return activeClassEntry();},getWorkspace:()=>{syncActiveClass();return workspace;},commit:commitWorkspace,switchClass,copyClass:all=>addClass(all,!all)};
     SeatMaster.classRecordsUI.init(callbacks);
     SeatMaster.separationUI.init(callbacks);
+    SeatMaster.classroomEditor.init(() => state, () => { render({ keepInputs: true }); saveSoon(); }, {
+      record: recordRoomEdit, undo: undoRoomEdit, redo: redoRoomEdit,
+      begin:beginLayoutDraft,suspend:suspendLayoutDraft,finish:finishLayoutDraft,
+      dragging: () => !!roomPointerDrag,
+      cancelPointer: () => {
+        if (!roomPointerDrag) return;
+        roomRedoStack = roomPointerDrag.redoBeforeDrag; roomPointerDrag = null;
+        const before = roomUndoStack.pop(); if (before) restoreRoomEdit(before);
+      },
+      canUndo: () => roomUndoStack.length > 0, canRedo: () => roomRedoStack.length > 0
+    });
     studentPicker = SeatMaster.studentDraw.init(() => state, updateSoundButton,saveWorkspace);
     groupPlannerUi = SeatMaster.groupUI.create(() => state, saveSoon);
     render();

@@ -12,7 +12,7 @@ parser.add_argument('--browser', action='store_true')
 args = parser.parse_args()
 commands = [['node', str(file.relative_to(ROOT))] for file in sorted((ROOT / 'tests').glob('*.test.js'))]
 if args.browser:
-    commands += [[sys.executable, '-X', 'utf8', str(ROOT / 'tests' / file)] for file in ['manual-browser.py', 'features-browser.py', 'onboarding-browser.py', 'inclusive-browser.py', 'class-records-browser.py','seating-constraints-browser.py']]
+    commands += [[sys.executable, '-X', 'utf8', str(ROOT / 'tests' / file)] for file in ['manual-browser.py', 'features-browser.py', 'onboarding-browser.py', 'inclusive-browser.py', 'class-records-browser.py','seating-constraints-browser.py', 'inclusion-purpose-browser.py', 'classroom-editor-browser.py', 'classroom-viewport-browser.py', 'onboarding-polish-browser.py', 'drawing-editor-browser.py', 'seat-relations-browser.py']]
 results = []
 for command in commands:
     print('RUN', ' '.join(command), flush=True)

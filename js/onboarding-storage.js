@@ -10,8 +10,8 @@
     if (!state?.config || !Array.isArray(state.seats)) return false;
     const baseline = SM.engine.normalizeConfig(SM.constants.DEFAULT_CONFIG);
     const config = SM.engine.normalizeConfig(state.config);
-    if (Object.keys(baseline).some(key => baseline[key] !== config[key])) return true;
-    if (state.hasDrawn || state.roomLayout || state.activities?.length) return true;
+    if (Object.keys(baseline).some(key => baseline[key] !== config[key] && !(key === 'studentData' && config[key] === ''))) return true;
+    if (state.hasDrawn || state.roomLayout || state.classroomGeometry || state.activities?.length) return true;
     if (Object.values(state.manualDraft || {}).some(Number.isInteger)) return true;
     if (Object.values(state.assignment || {}).some(Number.isInteger)) return true;
     const expected = SM.engine.buildSeatGrid(baseline, []);

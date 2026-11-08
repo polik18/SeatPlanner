@@ -161,6 +161,7 @@
             <span data-i18n="admin.studentData">學生資料（選填）</span>
             <textarea id="studentDataInput" rows="7" placeholder="座號　姓名" data-i18n-placeholder="admin.dataPlaceholder"></textarea>
             <small data-i18n="admin.dataHelp">第一列填欄名，可直接貼上 Excel；姓名後方可增加任意資料欄位。</small>
+            <small class="privacy-note" data-i18n="purpose.demo"></small>
             <small class="privacy-note" data-i18n="admin.dataPrivacy">展示僅公開座號與姓名。完整備份仍包含原有欄位，請避免敏感資訊。</small>
           </label>
 
@@ -187,6 +188,11 @@
             </label>
           </div>
 
+          <label class="field">
+            <span data-v5="教室外形比例|Room proportions"></span>
+            <select id="roomAspectInput"><option value="landscape" data-v5="橫向長方形（4:3）|Landscape (4:3)"></option><option value="portrait" data-v5="直向長方形（3:4）|Portrait (3:4)"></option></select>
+            <small data-v5="只調整教室外形，保留座位數與預排；行數與排數可另外設定。|Changes proportions while preserving seats and assignments; set rows and columns separately."></small>
+          </label>
           <div class="layout-rotation">
             <div>
               <strong data-i18n="admin.rotateLayout">旋轉整間教室</strong>
@@ -392,6 +398,16 @@
         <section class="workflow-card admin-only" aria-labelledby="workflowTitle">
           <div class="workflow-heading"><div><p class="step-label">SEATPLANNER INCLUSIVE</p><h2 id="workflowTitle" data-i18n="workflow.title"></h2></div><span class="workflow-leaf" aria-hidden="true">❧</span></div>
           <p data-i18n="workflow.hint"></p>
+          <section class="inclusive-purpose" aria-label="核心功能 / Core features">
+            <p class="step-label" data-i18n="purpose.audience"></p>
+            <h3 data-i18n="purpose.title"></h3>
+            <div class="inclusive-actions">
+              <button type="button" data-workflow="priority"><strong data-i18n="purpose.reserve"></strong><span data-i18n="purpose.reserveText"></span></button>
+              <button type="button" data-workflow="separation"><strong data-i18n="purpose.separate"></strong><span data-i18n="purpose.separateText"></span></button>
+            </div>
+            <p class="inclusive-public" data-i18n="purpose.public"></p>
+            <small data-i18n="purpose.private"></small>
+          </section>
           <nav class="workflow-steps" aria-label="編排步驟" data-i18n-aria-label="workflow.modes">
             <button type="button" data-workflow="class" aria-current="step"><b>01</b><span data-i18n="workflow.class"></span></button>
             <button type="button" data-workflow="room"><b>02</b><span data-i18n="workflow.room"></span></button>
@@ -434,7 +450,7 @@
           </div>
         </div>
         <section id="separationPanel" class="separation-panel admin-only" aria-labelledby="separationTitle">
-          <details id="separationDetails"><summary id="separationTitle" data-v5="同儕分開安排｜抽位必須遵守|Separation rules · enforced in draws"></summary>
+          <details id="separationDetails" open><summary id="separationTitle" data-v5="同儕分開安排｜僅老師可見，抽位必須遵守|Peer separation · teacher only, enforced in draws"></summary>
             <p data-v5="不相鄰包含左右、前後及斜角。不同桌組是另一項規則；只用於日常座位，不限制活動分組。|Nonadjacent includes horizontal, vertical and diagonal neighbors. Different tables is a separate rule. These rules apply to daily seating, not activity groups."></p>
             <input id="ruleSearch" type="search" aria-label="搜尋學生 / Search students" placeholder="搜尋學生 / Search students" />
             <div class="field-grid"><label class="field"><span data-v5="學生 A|Student A"></span><select id="ruleStudentA"></select></label><label class="field"><span data-v5="學生 B|Student B"></span><select id="ruleStudentB"></select></label></div>
@@ -470,13 +486,14 @@
           </div>
         </div>
 
-        <div class="draw-panel presentation-only">
+        <div class="draw-panel presentation-only" role="region" aria-label="座位安排操作 / Seating actions">
           <p id="drawMessage" data-i18n="draw.ready">按下按鈕，開始公平隨機排位</p>
           <button class="draw-button" id="drawButton" type="button">
             <span class="draw-icon" aria-hidden="true">↻</span>
             <span id="drawButtonText" data-i18n="draw.start">開始抽籤</span>
           </button>
           <button class="button button-secondary" id="skipDrawButton" type="button" data-i18n="draw.skip" hidden>直接揭曉</button>
+          <button class="button button-secondary" id="presentationManualButton" type="button" data-i18n="mode.manual">手動安排</button>
         </div>
 
         <div id="drawSpotlight" class="draw-spotlight" aria-hidden="true"></div>
@@ -608,18 +625,42 @@
     <p id="tutorialStorageNotice" class="tutorial-storage-notice" role="status" hidden></p>
 
     <dialog id="welcomeDialog" class="welcome-dialog" aria-labelledby="welcomeTitle" aria-describedby="welcomeSubtitle">
-      <div class="welcome-top"><span>SEATPLANNER INCLUSIVE</span><button class="button button-secondary language-button" type="button"><span data-language-label>EN</span></button></div>
-      <img class="welcome-art" src="SeatPlanner-main.png" alt="" width="1672" height="941" />
+      <div class="welcome-top"><span class="welcome-brand"><b aria-hidden="true">SI</b> SEATPLANNER INCLUSIVE</span><button class="button button-secondary language-button" type="button"><span data-language-label>EN</span></button></div>
+      <div class="welcome-layout">
+      <section id="welcomeCarousel" class="welcome-carousel" aria-label="功能介紹 / Feature introduction" aria-roledescription="carousel" tabindex="0">
+        <div class="welcome-slides">
+          <img class="welcome-art" src="SeatPlanner-main.png" alt="SeatPlanner 班級座位管理介紹" width="1672" height="941" />
+          <img class="welcome-art" src="SeatPlanner-main2.png" alt="融合教育座位編排功能與操作流程" width="1491" height="1055" hidden />
+          <img class="welcome-art" src="SeatPlanner-main3.png" alt="合理調整預排與學生隱私" width="1448" height="1086" hidden />
+        </div>
+        <div class="carousel-controls">
+          <button id="carouselPrevious" type="button" aria-label="上一張 / Previous slide">❮</button>
+          <div class="carousel-dots"><button type="button" data-slide="0" aria-label="第 1 張 / Slide 1" aria-current="true"></button><button type="button" data-slide="1" aria-label="第 2 張 / Slide 2" aria-current="false"></button><button type="button" data-slide="2" aria-label="第 3 張 / Slide 3" aria-current="false"></button></div>
+          <button id="carouselNext" type="button" aria-label="下一張 / Next slide">❯</button>
+          <button id="carouselPause" type="button" aria-label="暫停 / Pause" aria-pressed="false">Ⅱ</button>
+        </div>
+      </section>
       <div class="welcome-content"><p class="step-label" data-i18n="welcome.local"></p><h2 id="welcomeTitle" data-i18n="welcome.title"></h2><p id="welcomeSubtitle" data-i18n="welcome.subtitle"></p>
+        <div class="welcome-feature-strip"><span><b>01</b><span data-i18n="intro.reserve"></span></span><span><b>02</b><span data-i18n="intro.separate"></span></span><span><b>03</b><span data-i18n="intro.reveal"></span></span></div>
+        <p class="welcome-core" data-i18n="purpose.welcome"></p>
         <p id="welcomeError" role="alert" hidden></p>
         <div class="welcome-actions"><button id="welcomeStart" class="button button-primary" type="button" data-i18n="welcome.start" autofocus>開始使用</button><button id="welcomeImport" class="button button-secondary" type="button" data-i18n="welcome.import">匯入既有班級</button><button id="welcomeSkip" class="button button-quiet" type="button" data-i18n="welcome.skip">跳過介紹</button></div>
       </div>
+      </div>
     </dialog>
-    <section id="tourPanel" class="tour-panel" role="region" aria-labelledby="tourTitle" hidden>
-      <p id="tourProgress" class="step-label" aria-live="polite"></p><h2 id="tourTitle"></h2><p id="tourText"></p>
-      <div class="tour-actions"><button id="tourPrevious" class="button button-secondary" type="button" data-i18n="tour.previous"></button><button id="tourSkip" class="button button-quiet" type="button" data-i18n="welcome.skip"></button><button id="tourNext" class="button button-primary" type="button" data-i18n="tour.next"></button></div>
-    </section>
-    <dialog id="readyDialog" class="simple-dialog" aria-labelledby="readyTitle"><h2 id="readyTitle" data-i18n="tour.ready"></h2><p data-i18n="tour.readyText"></p><button id="readyCreate" class="button button-primary" type="button" data-i18n="tour.create"></button></dialog>
+    <dialog id="tourDialog" class="tour-dialog" aria-labelledby="tourTitle" aria-describedby="tourText">
+      <section id="tourPanel" class="tour-panel" aria-labelledby="tourTitle" hidden>
+        <header class="tour-header"><p id="tourProgress" class="step-label" aria-live="polite"></p><button id="tourClose" class="tour-close" type="button" aria-label="關閉教學 / Close tutorial">×</button></header>
+        <nav id="tourSteps" class="tour-step-dots" aria-label="教學步驟 / Tutorial steps"></nav>
+        <div class="tour-meter" aria-hidden="true"><span id="tourMeterFill"></span></div>
+        <div class="tour-body">
+          <div id="tourScene" class="tour-scene" aria-hidden="true"></div>
+          <div class="tour-copy"><p class="tour-kicker" data-i18n="intro.kicker"></p><h2 id="tourTitle"></h2><p id="tourText"></p><button id="tourTry" class="tour-try" type="button" data-i18n="intro.try"></button></div>
+        </div>
+        <footer class="tour-actions"><button id="tourPrevious" class="button button-secondary" type="button" data-i18n="tour.previous"></button><button id="tourSkip" class="button button-quiet" type="button" data-i18n="welcome.skip"></button><button id="tourNext" class="button button-primary" type="button" data-i18n="tour.next"></button></footer>
+      </section>
+    </dialog>
+    <dialog id="readyDialog" class="simple-dialog ready-dialog" aria-labelledby="readyTitle"><div class="ready-check" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="29"/><path d="m20 32 8 8 17-18"/></svg></div><p class="step-label">SEATPLANNER INCLUSIVE</p><h2 id="readyTitle" data-i18n="tour.ready"></h2><p data-i18n="tour.readyText"></p><button id="readyCreate" class="button button-primary" type="button" data-i18n="tour.create"></button></dialog>
     <dialog id="observationDialog" class="simple-dialog observation-dialog" aria-labelledby="observationTitle"><h2 id="observationTitle" data-i18n="support.observationTitle"></h2><pre data-i18n="support.observationText"></pre><div class="dialog-actions"><button class="button button-secondary" id="observationClose" type="button" data-i18n="support.close"></button><button class="button button-primary" id="observationPrint" type="button" data-i18n="support.print"></button></div></dialog>
     <dialog id="classLibraryDialog" class="library-dialog" aria-labelledby="classLibraryTitle"><div class="dialog-heading"><h2 id="classLibraryTitle" data-v5="我的班級與排位紀錄|My classes and seating records"></h2><button class="button button-secondary" type="button" data-close-v5="classLibraryDialog" data-v5="關閉|Close"></button></div><p data-v5="自動暫存用來接續工作；具名紀錄可還原完整版本。單班檔可帶到別的裝置。|Autosave resumes your work; named records restore complete versions. A class backup can be opened on another device."></p><label><input id="showArchivedClasses" type="checkbox" /><span data-v5="顯示封存班級|Show archived classes"></span></label><div id="classLibraryList"></div></dialog>
     <dialog id="saveClassDialog" class="simple-dialog" aria-labelledby="saveClassTitle"><h2 id="saveClassTitle" data-v5="儲存班級紀錄|Save a class record"></h2><label class="field"><span data-v5="紀錄名稱，例如：11 月座位|Record name, e.g. November seating"></span><input id="classRecordName" maxlength="80" /></label><p data-v5="保存名單、教室、規則、排位、草稿及活動。規劃衝突可保存，但不能完成展示。|Saves roster, room, rules, seating, draft and activities. Conflicting plans may be saved, but cannot be presented as complete."></p><div class="dialog-actions"><button class="button button-secondary" data-close-v5="saveClassDialog" type="button" data-v5="取消|Cancel"></button><button class="button button-primary" id="saveClassRecordButton" type="button" data-v5="儲存紀錄|Save record"></button></div></dialog>
@@ -634,11 +675,14 @@
     <script src="js/inclusive-i18n.js"></script>
     <script src="js/seat-engine.js"></script>
     <script src="js/class-data.js"></script>
+    <script src="js/classroom-geometry.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/group-planner.js"></script>
     <script src="js/room-layout.js"></script>
+    <script src="js/drawing-scene.js"></script>
     <script src="js/seating-constraints.js"></script>
     <script src="js/constrained-arranger.js"></script>
+    <script src="js/layout-planner.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/group-ui.js"></script>
     <script src="js/sound.js"></script>
@@ -650,6 +694,9 @@
     <script src="js/manual-seating.js"></script>
     <script src="js/class-records-ui.js"></script>
     <script src="js/separation-ui.js"></script>
+    <script src="js/classroom-camera.js"></script>
+    <script src="js/drawing-objects.js"></script>
+    <script src="js/classroom-editor.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

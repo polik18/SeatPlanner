@@ -264,7 +264,8 @@
       const otherGender = startGender === "male" ? "female" : "male";
       const mapped = (seats || []).map((seat) => {
         if (seat.type === "aisle") return { ...seat, pin: null };
-        const parity = pattern === "tableSequence" ? (roomOrder?.[seat.id]?.index || 0) % 2 : genderPatternParity(seat, pattern);
+        const cell = roomOrder?.[seat.id] || seat;
+        const parity = pattern === "tableSequence" ? (cell.index || 0) % 2 : genderPatternParity(cell, pattern);
         return { ...seat, type: parity ? otherGender : startGender };
       });
       const slotCounts = {
@@ -379,6 +380,7 @@
       className: String(config.className || (SeatMaster.i18n ? SeatMaster.i18n.t("common.untitled") : "未命名班級")).trim().slice(0, 30) || (SeatMaster.i18n ? SeatMaster.i18n.t("common.untitled") : "未命名班級"),
       rows,
       cols,
+      roomAspect: config.roomAspect === "portrait" ? "portrait" : "landscape",
       maxNumber,
       emptyNumbers: String(config.emptyNumbers || "").trim(),
       seatExcludedNumbers: formatNumberRanges(Array.from(parseEmptyNumbers(config.seatExcludedNumbers, maxNumber))),
@@ -518,13 +520,18 @@
     const femaleStudents = secureShuffle(available.filter((student) => student.gender === "female"));
     const maleSeats = secureShuffle(state.seats.filter((seat) => seat.type === "male" && !seat.pin));
     const femaleSeats = secureShuffle(state.seats.filter((seat) => seat.type === "female" && !seat.pin));
-    const generalSeats = secureShuffle(state.seats.filter((seat) => seat.type === "general" && !seat.pin));
+    const generalSeats = secureShuffle(state.seats.filter((seat) => seat.type === "general" && !seat.pin)).sort((a,b)=>Number(Boolean(state.genderPlan?.preferences?.[a.id]))-Number(Boolean(state.genderPlan?.preferences?.[b.id])));
 
     while (maleStudents.length && maleSeats.length) assignment[maleSeats.pop().id] = maleStudents.pop().number;
     while (femaleStudents.length && femaleSeats.length) assignment[femaleSeats.pop().id] = femaleStudents.pop().number;
 
     const remainingStudents = secureShuffle([...maleStudents, ...femaleStudents]);
-    while (remainingStudents.length && generalSeats.length) assignment[generalSeats.pop().id] = remainingStudents.pop().number;
+    while (remainingStudents.length && generalSeats.length) {
+      const seat=generalSeats.pop(),preferred=state.genderPlan?.preferences?.[seat.id];
+      const index=preferred ? remainingStudents.findIndex(s=>s.gender===preferred) : -1;
+      const student=index>=0 ? remainingStudents.splice(index,1)[0] : remainingStudents.pop();
+      assignment[seat.id]=student.number;
+    }
 
     state.seats.forEach((seat) => {
       if (seat.type !== "aisle" && assignment[seat.id] === undefined) assignment[seat.id] = null;

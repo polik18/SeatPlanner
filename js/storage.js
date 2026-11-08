@@ -7,13 +7,18 @@
   const newId = () => SM.classData?.id() || window.crypto?.randomUUID?.() || `class-${Date.now()}-${Math.random()}`;
   function serializableState(state) {
     return clone({
-      version: VERSION, config: { ...state.config },
+      version: state.roomLayout?.version===3 || state.layoutDraft ? 7 : state.classroomGeometry ? 6 : VERSION, config: { ...state.config },
       seats: state.seats.map(seat => ({ id:seat.id,row:seat.row,col:seat.col,type:seat.type,pin:seat.pin || null })),
       assignment: state.hasDrawn ? { ...state.assignment } : {}, hasDrawn: Boolean(state.hasDrawn),
       resultSource: state.resultSource || 'draw', adminMode: state.adminMode || 'layout',
       manualDraft: state.manualDraft || null, activities: state.activities || [], roomLayout: state.roomLayout || null,
       rosterIdentity: state.rosterIdentity || [], seatingConstraints: state.seatingConstraints || { version:1,pairs:[] },
-      seatTopology: state.seatTopology || null, studentDrawRound: state.studentDrawRound || null
+      seatTopology: state.seatTopology || null, studentDrawRound: state.studentDrawRound || null,
+      ...(state.classroomGeometry ? { classroomGeometry: state.classroomGeometry } : {}),
+      ...(state.pendingSeatPins ? {pendingSeatPins:state.pendingSeatPins} : {}),
+      ...(state.genderPlan ? {genderPlan:state.genderPlan} : {}),
+      ...(state.layoutCheck ? {layoutCheck:state.layoutCheck} : {}),
+      ...(state.layoutDraft ? {layoutDraft:serializableState({...state.layoutDraft,layoutDraft:null})} : {})
     });
   }
   function isClassState(value) {
@@ -22,6 +27,11 @@
     return value.seats.every(seat => seat && typeof seat.id === 'string' && seat.id && !ids.has(seat.id) && ids.add(seat.id) && Number.isInteger(seat.row) && Number.isInteger(seat.col) && SM.constants.SEAT_TYPES.includes(seat.type) && (seat.pin == null || Number.isInteger(seat.pin)));
   }
   function validExtensions(state) {
+    if(state.roomLayout?.version!==undefined&&![1,2,3].includes(state.roomLayout.version))return false;
+    if(state.roomLayout?.version===3 && (!SM.drawingScene || !SM.drawingScene.valid(state)))return false;
+    if(state.pendingSeatPins && (!Array.isArray(state.pendingSeatPins)||state.pendingSeatPins.some(n=>!Number.isInteger(n)||n<1)||new Set(state.pendingSeatPins).size!==state.pendingSeatPins.length))return false;
+    if(state.layoutDraft && (state.layoutDraft.layoutDraft || !isClassState(state.layoutDraft) || !validExtensions(state.layoutDraft)))return false;
+    if (state.classroomGeometry != null && (!SM.classroomGeometry || !SM.classroomGeometry.valid(state.classroomGeometry))) return false;
     const identity = state.rosterIdentity || [], ids = new Set(), numbers = new Set();
     if (!Array.isArray(identity)) return false;
     for (const row of identity) {
@@ -38,13 +48,16 @@
     }
     const top = state.seatTopology;
     if (top && (typeof top.signature !== 'string' || typeof top.confirmed !== 'boolean' || !Array.isArray(top.edges) || top.edges.some(edge => !Array.isArray(edge) || edge.length !== 2 || edge.some(id => typeof id !== 'string') || edge[0] === edge[1]))) return false;
+    const edgeList=edges=>Array.isArray(edges)&&edges.length<=10000&&edges.every(e=>Array.isArray(e)&&e.length===2&&e.every(id=>typeof id==='string')&&e[0]!==e[1])&&new Set(edges.map(e=>JSON.stringify([...e].sort()))).size===edges.length;
+    if(top?.autoEdges!==undefined&&!edgeList(top.autoEdges))return false;
+    if(top?.overrides&&(!edgeList(top.overrides.add)||!edgeList(top.overrides.remove)))return false;
     const round = state.studentDrawRound;
     if (round && (typeof round.key !== 'string' || !Array.isArray(round.history) || round.history.some(batch => !Array.isArray(batch) || batch.some(n => !Number.isInteger(n)) || new Set(batch).size !== batch.length))) return false;
     return true;
   }
   function migrateState(source) {
-    if (!isClassState(source) || ![1,2,3,4,5].includes(source.version)) return null;
-    if (source.version === 5 && !validExtensions(source)) return null;
+    if (!isClassState(source) || ![1,2,3,4,5,6,7].includes(source.version)) return null;
+    if (source.version >= 5 && !validExtensions(source)) return null;
     const state = clone(source);
     state.version=VERSION;
     state.config={...SM.constants.DEFAULT_CONFIG,...state.config,seatExcludedNumbers:source.version===1?'':source.config.seatExcludedNumbers || ''};
@@ -55,14 +68,14 @@
     return state;
   }
   function migrate(source) {
-    if (!source || ![1,2,3,4,5].includes(source.version) || source.format && !['seatplanner-workspace','seatplanner-class'].includes(source.format)) return null;
+    if (!source || ![1,2,3,4,5,6,7].includes(source.version) || source.format && !['seatplanner-workspace','seatplanner-class'].includes(source.format)) return null;
     const entries = Array.isArray(source.classes) ? source.classes : [{id:'legacy',state:source}];
-    if (!entries.length || Array.isArray(source.classes) && ![4,5].includes(source.version)) return null;
+    if (!entries.length || Array.isArray(source.classes) && ![4,5,6,7].includes(source.version)) return null;
     const classes=[], used=new Set(), mapping=new Map();
     for (const entry of entries) {
       const state=migrateState(entry?.state);
       if (!state) return null;
-      const id=source.version===5 && typeof entry.id==='string' && entry.id ? entry.id : newId();
+      const id=source.version>=5 && typeof entry.id==='string' && entry.id ? entry.id : newId();
       if (used.has(id)) return null;
       used.add(id); mapping.set(entry.id,id);
       const records=[];
@@ -84,6 +97,8 @@
     const value=migrate(workspace);
     if (!value) throw invalid();
     value.classes=value.classes.map(entry=>({...entry,state:serializableState(entry.state),records:entry.records.map(record=>({...record,state:serializableState(record.state)}))}));
+    if (value.classes.some(entry => entry.state.classroomGeometry || entry.records.some(record => record.state.classroomGeometry))) value.version = 6;
+    if (value.classes.some(entry=>entry.state.version===7 || entry.records.some(record=>record.state.version===7)))value.version=7;
     return value;
   }
   function download(workspace, single=false) {
@@ -91,7 +106,7 @@
     if (single) value.format='seatplanner-class';
     const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json;charset=utf-8'}));
     const link=document.createElement('a');link.href=url;
-    link.download=`SeatPlanner-Inclusive-${single?(value.classes[0].state.config.className || 'class'):'classes'}-v5.json`;
+    link.download=`SeatPlanner-Inclusive-${single?(value.classes[0].state.config.className || 'class'):'classes'}-v${value.version}.json`;
     document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   SM.storage={
