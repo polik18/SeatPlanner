@@ -72,7 +72,6 @@
     state.assignment = mapAssignments(state.assignment) || {};
     state.manualDraft = mapAssignments(state.manualDraft);
     state.seats.forEach(seat => { seat.pin = remap.get(seat.pin) ?? null; });
-    // Keep retired identities, but never re-use their numbers for a new person.
     state.rosterIdentity = [...next, ...old.filter(row => !used.has(row.studentId)).map(row => ({ ...row, number: null }))];
     if(state.studentDrawRound){state.studentDrawRound={key:JSON.stringify(next.map(row=>[row.studentId,row.number])),history:state.studentDrawRound.history.map(batch=>batch.map(number=>remap.get(number)).filter(Number.isInteger)).filter(batch=>batch.length)};}
     state.config = config;

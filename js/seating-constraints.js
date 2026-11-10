@@ -48,7 +48,6 @@
     const autoEdges=suggest(state),previous=state.seatTopology;
     let overrides=previous?.overrides;
     if(!overrides&&previous?.confirmed&&previous.source!=='geometry-v1'){
-      // Migrate a reviewed full graph before replacing it with geometric suggestions.
       const baseline=previous.autoEdges||autoEdges,base=new Set(baseline.map(e=>edgeKey(...e))),chosen=new Set(previous.edges.map(e=>edgeKey(...e)));
       overrides={add:previous.edges.filter(e=>!base.has(edgeKey(...e))),remove:baseline.filter(e=>!chosen.has(edgeKey(...e)))};
     }

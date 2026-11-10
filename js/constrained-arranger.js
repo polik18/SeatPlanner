@@ -2,7 +2,6 @@
   'use strict';
   const SM = window.SeatMaster, C = SM.seatingConstraints;
   const oldArrange = SM.engine.arrange;
-  // Synchronous callers must never receive an unconstrained result by accident.
   SM.engine.arrange = state => {
     if (C.activeRules(state).length) throw new Error(C.say('請使用符合分開安排規則的抽位流程。','Use the constrained seating draw.'));
     return oldArrange(state);

@@ -26,8 +26,8 @@
     normalized.split(",").filter(Boolean).forEach((token) => {
       const range = token.match(/^(\d+)\s*-\s*(\d+)$/);
       if (range) {
-        const start = Math.min(Number(range[1]), Number(range[2]));
-        const end = Math.max(Number(range[1]), Number(range[2]));
+        const start = Math.max(1, Math.min(Number(range[1]), Number(range[2])));
+        const end = Math.min(maxNumber, Math.max(Number(range[1]), Number(range[2])));
         for (let number = start; number <= end; number += 1) {
           if (number >= 1 && number <= maxNumber) result.add(number);
         }
@@ -162,9 +162,6 @@
         return;
       }
 
-      // A spreadsheet row with an empty student number is not a name-only
-      // roster entry. Ignore stray values in later columns instead of assigning
-      // them sequentially to the next available student number.
       if (hasStructuredHeader || rawLine.includes("\t") || /[，,]/.test(rawLine)) return;
 
       while (sequentialIndex < roster.length && records.has(roster[sequentialIndex].number)) sequentialIndex += 1;

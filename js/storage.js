@@ -131,7 +131,7 @@
             const oldKey=JSON.stringify([active.config.className,roster.map(s=>[s.number,names.get(s.number)||''])]);
             const numbers=new Set(roster.map(student=>student.number));
             if(old?.key===oldKey && Array.isArray(old.history) && old.history.length<=999 && old.history.every(batch=>Array.isArray(batch)&&batch.length>0&&batch.length<=roster.length&&new Set(batch).size===batch.length&&batch.every(n=>numbers.has(n)))) active.studentDrawRound={key:JSON.stringify(active.rosterIdentity.filter(r=>r.number!==null).map(r=>[r.studentId,r.number])),history:old.history};
-          } catch(_){ /* preserve legacy slot, do not invent missing history */ }
+          } catch(_){  }
         }
         loadStatus={status:'loaded',sourceKey,migrated:sourceKey!==STORAGE_KEY};return result;
       } catch(error){writeBlocked=true;loadStatus={status:'error',error};return null;}

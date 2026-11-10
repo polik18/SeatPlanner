@@ -944,8 +944,6 @@
   }
 
   function goHome() {
-    // Closing activities uses the same cancellation path as their own exit.
-    // A draft is kept separately and must never be completed or cleared here.
     if (studentPicker) studentPicker.close();
     const dialog = document.getElementById("pinDialog");
     if (dialog.open) dialog.close();
@@ -1108,7 +1106,6 @@
     render({ keepInputs: true, concealResult: true });
     ui.renderSeatGrid({ ...state, hasDrawn: false }, true, adminMode, null);
     document.getElementById("skipDrawButton").hidden = false;
-    // Keep the previous assignment until the new result is actually revealed.
     const seatElements = Array.from(document.querySelectorAll(".seat:not(.is-aisle)"));
     seatTimeline = SeatMaster.effects.run({
       onStage(phase, number) {

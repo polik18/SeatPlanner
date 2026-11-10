@@ -161,7 +161,7 @@
   };
 
   let language = "zh-Hant";
-  try { language = localStorage.getItem(LANGUAGE_KEY) === "en" ? "en" : "zh-Hant"; } catch (_) { /* memory-only language */ }
+  try { language = localStorage.getItem(LANGUAGE_KEY) === "en" ? "en" : "zh-Hant"; } catch (_) {  }
 
   function t(key, values) {
     let text = (dictionaries[language] && dictionaries[language][key]) || dictionaries["zh-Hant"][key] || key;
@@ -180,7 +180,7 @@
 
   function setLanguage(nextLanguage) {
     language = nextLanguage === "en" ? "en" : "zh-Hant";
-    try { localStorage.setItem(LANGUAGE_KEY, language); } catch (_) { /* memory-only language */ }
+    try { localStorage.setItem(LANGUAGE_KEY, language); } catch (_) {  }
     apply();
     window.dispatchEvent(new CustomEvent("seatmaster:languagechange", { detail: { language } }));
     return language;

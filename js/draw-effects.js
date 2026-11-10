@@ -2,7 +2,6 @@
   "use strict";
   const SeatMaster = window.SeatMaster;
 
-  // One cancellable timeline for both seat draws and student draws.
   function run(options) {
     const { sound } = SeatMaster;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches || Boolean(window.document?.body?.classList.contains("calm-mode"));

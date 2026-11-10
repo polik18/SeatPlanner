@@ -4,8 +4,6 @@
   const SM = window.SeatMaster;
   const { engine, i18n, ui } = SM;
 
-  // Drafts are independent of the last published result. Never keep duplicates,
-  // missing student numbers, removed desks, or aisle assignments after an edit.
   function normalize(state, source) {
     const valid = new Set(engine.studentsRequiringSeats(state.config).map((s) => s.number));
     const used = new Set();
@@ -28,7 +26,6 @@
     if (!Object.hasOwn(assignment, targetId) || !engine.studentsRequiringSeats(state.config).some((s) => s.number === number)) return assignment;
     const from = Object.keys(assignment).find((id) => assignment[id] === number);
     if (from === targetId) return assignment;
-    // A seated student swaps; an unseated student sends the occupant to the tray.
     if (from) assignment[from] = assignment[targetId];
     assignment[targetId] = number;
     return assignment;

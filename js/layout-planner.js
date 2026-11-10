@@ -8,7 +8,6 @@
     if(state.pendingSeatPins?.length)errors.push('預排尚未重新指定位置：'+state.pendingSeatPins.join('、')+' 號。');
     if(state.genderPlan?.source==='teacher-pattern'){
       const pattern=state.genderPlan.strategy,result=SM.engine.applyGenderPattern(state.config,state.seats,pattern,SM.drawingScene.genderOrder(state));
-      // A moved layout must not silently discard an existing preassignment.
       const pins=new Map(state.seats.filter(s=>s.pin).map(s=>[s.id,s.pin]));
       state.seats=result.seats.map(s=>({...s,pin:pins.get(s.id)||null}));
     }

@@ -7,7 +7,7 @@
   let master = null;
   const voices = new Set();
   let enabled = false;
-  try { enabled = localStorage.getItem(SOUND_KEY) === "true"; } catch (_) { /* stay silent */ }
+  try { enabled = localStorage.getItem(SOUND_KEY) === "true"; } catch (_) {  }
 
   function ensureContext() {
     if (!enabled) return null;
@@ -104,13 +104,13 @@
   }
 
   function stop() {
-    voices.forEach((voice) => { try { voice.stop(); } catch (_) { /* Already ended. */ } });
+    voices.forEach((voice) => { try { voice.stop(); } catch (_) {  } });
     voices.clear();
   }
 
   function setEnabled(value) {
     enabled = Boolean(value);
-    try { localStorage.setItem(SOUND_KEY, String(enabled)); } catch (_) { /* memory-only preference */ }
+    try { localStorage.setItem(SOUND_KEY, String(enabled)); } catch (_) {  }
     if (master) master.gain.setValueAtTime(enabled ? 0.18 : 0, context.currentTime);
     if (!enabled) stop();
     if (enabled) {

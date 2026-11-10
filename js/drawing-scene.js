@@ -124,8 +124,6 @@
     for(const s of seats)for(const p of obs.filter(o=>o.kind==='path'))if(SM.roomLayout.tablesIntersect(chair(s),normalized(p),g.bounds))errors.push('座位占用通道：'+s.id+'、'+p.id);
     return [...new Set(errors)];
   }
-  // Logical rows/columns follow the current scene, never the historical seat IDs.
-  // Cluster small offsets, while keeping large gaps as empty logical cells.
   function logicalCells(state) {
     const nodes=objects(state).filter(o=>o.kind==='seat');
     const median=xs=>{xs.sort((a,b)=>a-b);return xs[Math.floor((xs.length-1)/2)]||1;};

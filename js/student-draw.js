@@ -29,7 +29,7 @@
           if (saved && saved.key === key && Array.isArray(saved.history) && saved.history.length <= 999 &&
               saved.history.every((batch) => Array.isArray(batch) && batch.length > 0 && batch.length <= students.length &&
                 new Set(batch).size === batch.length && batch.every((number) => valid.has(number)))) round = saved;
-        } catch (_) { /* A missing or outdated round starts empty. */ }
+        } catch (_) {  }
       }
       el("studentDrawClass").textContent = config.className;
     }
@@ -98,7 +98,6 @@
         el("studentDrawCount").reportValidity();
         return;
       }
-      // Select once, using cryptographic randomness. Animation never affects the result.
       const winners = engine.pickStudents(getState().config, count, excluded());
       const pool = students.filter((student) => !excluded().includes(student.number)).map((student) => student.number);
       stop();
@@ -121,7 +120,6 @@
         onTick() { cards(engine.secureShuffle(pool).slice(0, count), false); },
         onReveal() {
           round.history.push(winners);
-          // Keep the full round in no-repeat mode; bound unlimited repeat-mode history.
           if (round.history.length > 999) round.history.shift();
           saveRound();
           cards(winners, true);

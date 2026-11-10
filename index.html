@@ -16,7 +16,7 @@
       <div class="brand">
         <span class="brand-mark" aria-hidden="true">SI</span>
         <div>
-          <p class="eyebrow">SEATPLANNER INCLUSIVE · 2.1</p>
+          <p class="eyebrow">SEATPLANNER INCLUSIVE</p>
           <h1 id="pageTitle">班級座位編排</h1>
         </div>
       </div>
@@ -396,7 +396,9 @@
 
       <section class="classroom-stage" aria-label="教室座位圖">
         <section class="workflow-card admin-only" aria-labelledby="workflowTitle">
-          <div class="workflow-heading"><div><p class="step-label">SEATPLANNER INCLUSIVE</p><h2 id="workflowTitle" data-i18n="workflow.title"></h2></div><span class="workflow-leaf" aria-hidden="true">❧</span></div>
+          <details id="workflowIntro" class="workflow-intro" open>
+          <summary class="workflow-intro-summary"><div class="workflow-heading"><div><p class="step-label">SEATPLANNER INCLUSIVE</p><h2 id="workflowTitle" data-i18n="workflow.title"></h2></div><span class="workflow-intro-chevron" aria-hidden="true">⌄</span></div></summary>
+          <div id="workflowIntroBody" class="workflow-intro-body">
           <p data-i18n="workflow.hint"></p>
           <section class="inclusive-purpose" aria-label="核心功能 / Core features">
             <p class="step-label" data-i18n="purpose.audience"></p>
@@ -408,6 +410,8 @@
             <p class="inclusive-public" data-i18n="purpose.public"></p>
             <small data-i18n="purpose.private"></small>
           </section>
+          </div>
+          </details>
           <nav class="workflow-steps" aria-label="編排步驟" data-i18n-aria-label="workflow.modes">
             <button type="button" data-workflow="class" aria-current="step"><b>01</b><span data-i18n="workflow.class"></span></button>
             <button type="button" data-workflow="room"><b>02</b><span data-i18n="workflow.room"></span></button>
@@ -450,7 +454,7 @@
           </div>
         </div>
         <section id="separationPanel" class="separation-panel admin-only" aria-labelledby="separationTitle">
-          <details id="separationDetails" open><summary id="separationTitle" data-v5="同儕分開安排｜僅老師可見，抽位必須遵守|Peer separation · teacher only, enforced in draws"></summary>
+          <details id="separationDetails"><summary id="separationTitle" data-v5="易干擾同儕分開安排｜僅老師可見，抽位必須遵守|Peer separation · teacher only, enforced in draws"></summary>
             <p data-v5="不相鄰包含左右、前後及斜角。不同桌組是另一項規則；只用於日常座位，不限制活動分組。|Nonadjacent includes horizontal, vertical and diagonal neighbors. Different tables is a separate rule. These rules apply to daily seating, not activity groups."></p>
             <input id="ruleSearch" type="search" aria-label="搜尋學生 / Search students" placeholder="搜尋學生 / Search students" />
             <div class="field-grid"><label class="field"><span data-v5="學生 A|Student A"></span><select id="ruleStudentA"></select></label><label class="field"><span data-v5="學生 B|Student B"></span><select id="ruleStudentB"></select></label></div>

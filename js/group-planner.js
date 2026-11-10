@@ -53,8 +53,6 @@
     return groups;
   }
 
-  // Search group counts before allocating students. Average capacity is not a
-  // constraint: a six-person group and a two-person group are both legal.
   function drawSame(pool, targetSize, assignments) {
     if (!pool.length) return [];
     if (pool.length === 1) throw new Error(message("同性別分組每組至少需要 2 人。", "Same-gender groups need at least two students each."));
